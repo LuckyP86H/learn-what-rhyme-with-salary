@@ -1,0 +1,112 @@
+name: call-pipeline
+
+# Settings shared by every app container. RELIABILITY_MODE & friends are the experiment knobs:
+#   RELIABILITY_MODE=default docker compose up -d --force-recreate worker-spot worker-core
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://pipeline:pipeline@postgres:5432/pipeline
+  BROKER_URL: amqp://pipeline:pipeline@rabbitmq:5672//
+  RESULT_BACKEND: redis://redis:6379/0
+  RABBITMQ_API_URL: http://rabbitmq:15672/api
+  RABBITMQ_USER: pipeline
+  RABBITMQ_PASSWORD: pipeline
+  RELIABILITY_MODE: ${RELIABILITY_MODE:-hardened}
+  CELERY_ACKS_LATE: ${CELERY_ACKS_LATE:-}
+  CELERY_REJECT_ON_WORKER_LOST: ${CELERY_REJECT_ON_WORKER_LOST:-}
+  CELERY_PREFETCH_MULTIPLIER: ${CELERY_PREFETCH_MULTIPLIER:-}
+  STALL_THRESHOLD_SECONDS: ${STALL_THRESHOLD_SECONDS:-120}
+  POLICE_INTERVAL_SECONDS: ${POLICE_INTERVAL_SECONDS:-60}
+  CHUNK_MIN_SECONDS: ${CHUNK_MIN_SECONDS:-5}
+  CHUNK_MAX_SECONDS: ${CHUNK_MAX_SECONDS:-10}
+
+x-app: &app
+  build: .
+  image: call-pipeline:dev
+  environment: *app-env
+  depends_on: &app-deps
+    rabbitmq: {condition: service_healthy}
+    redis: {condition: service_healthy}
+    postgres: {condition: service_healthy}
+    bootstrap: {condition: service_completed_successfully}
+
+services:
+  # ---- infrastructure -------------------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: pipeline
+      RABBITMQ_DEFAULT_PASS: pipeline
+    ports:
+      - "127.0.0.1:15672:15672" # management UI + HTTP API (http://localhost:15672, pipeline/pipeline)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: pipeline
+      POSTGRES_PASSWORD: pipeline
+      POSTGRES_DB: pipeline
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipeline -d pipeline"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Creates the DB schema and declares the RabbitMQ exchanges/queues (incl. the dead-letter topology).
+  bootstrap:
+    <<: *app
+    command: python -m app.bootstrap
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    restart: "no"
+
+  # ---- application ----------------------------------------------------------------------------------
+  api:
+    <<: *app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:${API_PORT:-8100}:8000" # 8100, not 8000: 8000 is a very common port on dev machines
+
+  # The "Spot fleet": only consumes heavy_processing, 2 containers x 1 process each. This is what
+  # chaos/spot_killer.py kills. One process per container makes prefetch behaviour easy to see.
+  worker-spot:
+    <<: *app
+    command: celery -A app.celery_app:celery_app worker -Q heavy_processing -c 1 -n spot@%h -l INFO
+    deploy:
+      replicas: 2
+    stop_grace_period: 30s # time for a warm shutdown (SIGTERM) to let in-flight chunks finish
+
+  # The "on-demand" worker: ingest, the chord callback and the police. Never evicted.
+  worker-core:
+    <<: *app
+    command: celery -A app.celery_app:celery_app worker -Q default,priority -c 2 -n core@%h -l INFO
+
+  beat:
+    <<: *app
+    command: celery -A app.celery_app:celery_app beat -l INFO -s /tmp/celerybeat-schedule
+
+  # ---- observability --------------------------------------------------------------------------------
+  flower:
+    image: mher/flower:2.2.0
+    command: celery --broker=amqp://pipeline:pipeline@rabbitmq:5672// flower --broker_api=http://pipeline:pipeline@rabbitmq:15672/api/ --port=5555
+    ports:
+      - "127.0.0.1:5555:5555" # loopback only: Flower has no auth here
+    depends_on:
+      rabbitmq: {condition: service_healthy}
+
+volumes:
+  pgdata:

@@ -1,0 +1,90 @@
+COMPOSE ?= docker compose
+API_PORT ?= 8100
+API ?= http://localhost:$(API_PORT)
+CHUNKS ?= 5
+export API_PORT API
+
+.DEFAULT_GOAL := help
+.PHONY: help up down reset logs ps wait trigger trigger-retry trigger-bad trigger-poison trigger-bug status events dlq config \
+        test-spot test-spot-default test-prefetch test flower rabbitmq police-now psql
+
+help: ## show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+up: ## build + start the whole stack in hardened mode
+	$(COMPOSE) up -d --build
+	@$(MAKE) --no-print-directory wait
+	@echo ""
+	@echo "  API       $(API)/docs"
+	@echo "  Flower    http://localhost:5555"
+	@echo "  RabbitMQ  http://localhost:15672   (pipeline / pipeline)"
+	@echo ""
+	@echo "Next: make trigger"
+
+down: ## stop everything (keeps the database volume)
+	$(COMPOSE) down
+
+reset: ## stop everything and DELETE all state (db volume, queues)
+	$(COMPOSE) down -v
+
+wait: ## block until the API answers
+	@echo "waiting for the API..."; \
+	for i in $$(seq 1 60); do curl -fs $(API)/health >/dev/null && echo "API is up" && exit 0; sleep 2; done; \
+	echo "API did not come up; try: make logs"; exit 1
+
+logs: ## follow worker + beat logs (JSON)
+	$(COMPOSE) logs -f --tail=50 worker-spot worker-core beat
+
+ps: ## show containers
+	$(COMPOSE) ps
+
+trigger: ## run one 5-chunk call end-to-end and watch it finish (CHUNKS=8 to change)
+	./scripts/run_test_pipeline.sh $(CHUNKS)
+
+trigger-retry: ## recoverable faults: chunk 1 fails twice (backoff retry), chunk 3 hangs (soft time limit). Ends COMPLETED
+	./scripts/run_test_pipeline.sh 4 '{"1":"transient","3":"hang"}'
+
+trigger-bad: ## chunk 2 has corrupt audio (PermanentError): call ends FAILED, message parked in the DLQ (make dlq)
+	./scripts/run_test_pipeline.sh 5 '{"2":"permanent"}' || true
+
+trigger-poison: ## chunk 2 kills its own process every time (poison pill): requeued until the attempts cap, then DLQ
+	./scripts/run_test_pipeline.sh 5 '{"2":"crash"}' || true
+
+trigger-bug: ## chunk 2 raises an unexpected exception: task FAILURE -> chord error callback -> call FAILED
+	./scripts/run_test_pipeline.sh 5 '{"2":"bug"}' || true
+
+status: ## list recent calls
+	@curl -s $(API)/calls | python3 -m json.tool
+
+events: ## audit trail of a call: make events ID=<call_id>
+	@curl -s $(API)/calls/$(ID)/events | python3 -m json.tool
+
+dlq: ## peek at the dead-letter queue
+	@curl -s $(API)/dead-letters | python3 -m json.tool
+
+config: ## show the reliability settings in effect
+	@curl -s $(API)/config | python3 -m json.tool
+
+test-spot: ## Spot-eviction chaos test against HARDENED Celery (expect: call completes)
+	./scripts/test_spot_failure.sh hardened
+
+test-spot-default: ## same test against Celery's STOCK defaults (expect: work lost, call stuck until the police act)
+	./scripts/test_spot_failure.sh default
+
+test-prefetch: ## prefetch_multiplier=4 vs 1: watch workers hoard messages vs share fairly
+	./scripts/test_spot_failure.sh prefetch
+
+test: ## unit tests (inside the app image)
+	$(COMPOSE) run --rm --no-deps -T api python -m pytest -q -p no:cacheprovider
+
+police-now: ## run one police sweep immediately instead of waiting for beat
+	$(COMPOSE) exec worker-core celery -A app.celery_app:celery_app call tasks.police_sweep
+
+flower: ## open Flower
+	open http://localhost:5555
+
+rabbitmq: ## open the RabbitMQ management UI
+	open http://localhost:15672
+
+psql: ## psql shell into PostgreSQL
+	$(COMPOSE) exec postgres psql -U pipeline pipeline
