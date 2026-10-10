@@ -43,6 +43,7 @@ class RunStore:
         self.workers: dict[str, Worker] = {}
         self.started_on: dict[str, set[str]] = {}  # worker -> keys of tasks we believe are executing
         self.seq = 0
+        self.dropped = 0  # events discarded because a run hit max_tasks_per_run
         self._virtual_now = 0.0
         self._terminal = {s.key for s in load_states().states.values() if s.phase in ("done_ok", "done_bad")}
         self.listeners: list[Any] = []  # callables(run_id | None); invoked after each change
@@ -63,7 +64,10 @@ class RunStore:
             elif etype.startswith("task-") and event.get("uuid"):
                 handler = getattr(self, "_on_" + etype.replace("-", "_"), None)
                 if handler:
-                    changed = handler(event, local)
+                    try:
+                        changed = handler(event, local)
+                    except OverflowError:  # a runaway run must not take the whole monitor down
+                        self.dropped += 1
             else:
                 return
             self.seq += 1
@@ -89,6 +93,10 @@ class RunStore:
             _, old = self.runs.popitem(last=False)
             for key in old.task_keys:
                 task = self.tasks.pop(key, None)
+                if task and task.worker and task.worker in self.started_on:
+                    self.started_on[task.worker].discard(key)
+                    if not self.started_on[task.worker]:
+                        del self.started_on[task.worker]
                 if task and task.uuid in self.by_uuid:
                     self.by_uuid[task.uuid] = [k for k in self.by_uuid[task.uuid] if k != key]
                     if not self.by_uuid[task.uuid]:

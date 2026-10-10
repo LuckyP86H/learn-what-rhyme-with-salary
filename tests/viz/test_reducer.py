@@ -205,3 +205,26 @@ def test_crash_looping_worker_flaps_online_offline_without_breaking_the_store():
     store = build_store("celery447_on_rabbitmq43_flapping")
     assert len(store.workers) >= 1
     assert not store.tasks
+
+
+def test_a_runaway_run_is_capped_without_killing_ingestion():
+    from celery_viz.config import VizConfig
+
+    store = RunStore(VizConfig(max_tasks_per_run=3))
+    for i in range(10):
+        store.apply({"type": "task-sent", "uuid": f"c{i}", "name": "t.child", "root_id": "big", "parent_id": "big", "retries": 0, "timestamp": float(i), "local_received": float(i)})
+    store.apply({"type": "task-sent", "uuid": "other", "name": "t.x", "root_id": "other", "retries": 0, "timestamp": 20.0, "local_received": 20.0})
+    assert len(store.runs["big"].task_keys) == 3
+    assert store.dropped == 7
+    assert "other:0" in store.tasks, "later events for other runs are still processed"
+
+
+def test_eviction_also_cleans_the_started_index():
+    from celery_viz.config import VizConfig
+
+    store = RunStore(VizConfig(max_runs=1))
+    for uid in ("a", "b"):
+        for etype, extra in (("task-sent", {"name": "t.x", "root_id": uid, "retries": 0}), ("task-received", {"name": "t.x", "root_id": uid, "retries": 0}), ("task-started", {})):
+            store.apply({"type": etype, "uuid": uid, "hostname": "w@1", "timestamp": 1.0, "local_received": 1.0, **extra})
+    assert "a:0" not in store.tasks
+    assert store.started_on == {"w@1": {"b:0"}}
