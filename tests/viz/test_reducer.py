@@ -228,3 +228,58 @@ def test_eviction_also_cleans_the_started_index():
             store.apply({"type": etype, "uuid": uid, "hostname": "w@1", "timestamp": 1.0, "local_received": 1.0, **extra})
     assert "a:0" not in store.tasks
     assert store.started_on == {"w@1": {"b:0"}}
+
+
+def _task_running_on(store, host="w@1", started=10.0):
+    for etype, extra in (("task-sent", {"name": "t.x", "root_id": "u", "retries": 0}), ("task-received", {"name": "t.x", "root_id": "u", "retries": 0}), ("task-started", {})):
+        store.apply({"type": etype, "uuid": "u", "hostname": host, "timestamp": started, "local_received": started, **extra})
+    return store.tasks["u:0"]
+
+
+def test_a_short_heartbeat_without_active_cannot_make_a_running_task_look_finished():
+    # Regression found by live validation: workers interleave full heartbeats (with `active`) and short
+    # ones (without). A stale active=0 plus a fresh short heartbeat used to flag a RUNNING task.
+    from celery_viz.derive import silent_ended_keys
+
+    store = RunStore()
+    store.apply({"type": "worker-heartbeat", "hostname": "w@1", "freq": 2, "active": 0, "processed": 0, "timestamp": 9.0, "local_received": 9.0})
+    task = _task_running_on(store, started=10.0)
+    store.apply({"type": "worker-heartbeat", "hostname": "w@1", "freq": 2, "timestamp": 14.0, "local_received": 14.0})  # NO active field
+    assert silent_ended_keys(store) == set(), "the only active=0 report predates the task"
+    assert effective_state(task, store, 14.0)[0] == "STARTED"
+    # A heartbeat that DOES report active=0 after the start is real evidence.
+    store.apply({"type": "worker-heartbeat", "hostname": "w@1", "freq": 2, "active": 0, "processed": 0, "timestamp": 16.0, "local_received": 16.0})
+    assert silent_ended_keys(store) == {task.key}
+
+
+def test_a_running_task_is_never_flagged_silent_while_replaying_real_heartbeats(celery5):
+    # Same check as the live validation: flag-as-you-go over the whole recording; no chunk may ever be flagged.
+    from celery_viz.derive import silent_ended_keys
+
+    store = RunStore()
+    for event in events_of("celery5_pipeline"):
+        store.apply(event)
+        for key in silent_ended_keys(store):
+            assert store.tasks[key].name != "tasks.analyze_chunk", key
+
+
+def test_warm_shutdown_is_draining_not_lost_and_a_missed_grace_period_is_lost():
+    # Regression found by live validation: worker-offline arrives at the START of a warm shutdown, while the
+    # in-flight task is still running (and later succeeds). Calling that "lost" would flag every deploy.
+    store = RunStore()
+    task = _task_running_on(store, host="w@1", started=10.0)
+    store.apply({"type": "worker-heartbeat", "hostname": "w@1", "freq": 2, "active": 1, "processed": 0, "timestamp": 11.0, "local_received": 11.0})
+    store.apply({"type": "worker-offline", "hostname": "w@1", "freq": 2, "active": 1, "timestamp": 12.0, "local_received": 12.0})
+    assert effective_state(task, store, 15.0)[0] == "DRAINING"
+    assert effective_state(task, store, 12.0 + store.config.drain_grace_seconds + 1)[0] == "WORKER_LOST", "grace period ran out: it was killed"
+    store.apply({"type": "task-succeeded", "uuid": "u", "hostname": "w@1", "runtime": 5.0, "timestamp": 16.0, "local_received": 16.0})
+    assert effective_state(task, store, 17.0)[0] == "SUCCESS"
+
+
+def test_a_worker_that_comes_back_is_no_longer_draining():
+    store = RunStore()
+    task = _task_running_on(store, host="w@1", started=10.0)
+    store.apply({"type": "worker-offline", "hostname": "w@1", "freq": 2, "timestamp": 12.0, "local_received": 12.0})
+    store.apply({"type": "worker-online", "hostname": "w@1", "freq": 2, "timestamp": 13.0, "local_received": 13.0})
+    assert store.workers["w@1"].offline_since_local is None
+    assert effective_state(task, store, 14.0)[0] == "STARTED"

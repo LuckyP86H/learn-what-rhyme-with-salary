@@ -15,13 +15,18 @@ _WAITING_FOR_WORKER = ("RECEIVED", "STARTED", "WAITING_ETA")
 
 
 def worker_is_lost(worker: Worker | None, now: float, store: RunStore) -> bool:
-    if worker is None:
+    """Silent for too long. A worker that announced worker-offline is NOT 'lost': it is shutting down
+    (see worker_is_draining), and Celery's warm shutdown still lets in-flight tasks finish."""
+    if worker is None or worker.status == "offline":
         return False
-    if worker.status == "offline":
-        return True
     cfg = store.config
     limit = max(cfg.min_lost_after_seconds, cfg.lost_after_heartbeats * (worker.freq or 5.0))
     return (now - worker.last_seen_local) > limit
+
+
+def worker_is_draining(worker: Worker | None, now: float, store: RunStore) -> bool:
+    return bool(worker and worker.status == "offline" and worker.offline_since_local is not None
+                and (now - worker.offline_since_local) <= store.config.drain_grace_seconds)
 
 
 def silent_ended_keys(store: RunStore) -> set[str]:
@@ -30,7 +35,7 @@ def silent_ended_keys(store: RunStore) -> set[str]:
     Celery emits no terminal event when a task raises Ignore (self.replace() does this) or when the
     event is lost, so the task would look 'running' forever. A worker's heartbeat carries `active`, the
     number of tasks it is executing; if that is lower than the number of STARTED tasks we hold for it
-    (counting only tasks that began before that heartbeat), the oldest ones must have ended.
+    (counting only tasks that began before the heartbeat that REPORTED `active`), the oldest ones must have ended.
     """
     ended: set[str] = set()
     for host, keys in store.started_on.items():
@@ -39,7 +44,7 @@ def silent_ended_keys(store: RunStore) -> set[str]:
             continue
         eligible = sorted(
             (store.tasks[k] for k in keys if k in store.tasks and store.tasks[k].started_local is not None
-             and store.tasks[k].started_local < worker.last_seen_local - 0.5),
+             and store.tasks[k].started_local < worker.active_seen_local - 0.5),
             key=lambda t: t.started_local or 0.0,
         )
         excess = len(eligible) - worker.active
@@ -53,7 +58,12 @@ def effective_state(task: Task, store: RunStore, now: float, silent: set[str] | 
     state = task.state
     if state == "STARTED" and task.key in (silent_ended_keys(store) if silent is None else silent):
         return "ENDED_SILENTLY", f"{task.worker} reports it is no longer executing this, but no terminal event arrived"
-    if state in ("RECEIVED", "STARTED") and worker_is_lost(store.workers.get(task.worker or ""), now, store):
+    worker = store.workers.get(task.worker or "")
+    if state in ("RECEIVED", "STARTED") and worker is not None and worker.status == "offline":
+        if worker_is_draining(worker, now, store):
+            return "DRAINING", f"{task.worker} announced shutdown; a warm shutdown lets in-flight tasks finish"
+        return "WORKER_LOST", f"{task.worker} went offline and this task never finished"
+    if state in ("RECEIVED", "STARTED") and worker_is_lost(worker, now, store):
         return "WORKER_LOST", f"{task.worker} has not sent a heartbeat for a while (it may have been killed)"
     if state == "RECEIVED" and task.eta and task.eta > now:
         return "WAITING_ETA", f"will run in {task.eta - now:.0f}s"
@@ -154,7 +164,7 @@ def workers_view(store: RunStore, now: float | None = None) -> list[dict[str, An
     return [
         {
             "hostname": w.hostname,
-            "status": "lost" if worker_is_lost(w, now, store) and w.status != "offline" else w.status,
+            "status": "lost" if worker_is_lost(w, now, store) else w.status,
             "software": w.software,
             "freq": w.freq,
             "silent_for": round(now - w.last_seen_local, 1),

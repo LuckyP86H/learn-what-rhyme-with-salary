@@ -185,6 +185,20 @@
       ]
     },
     {
+      "key": "DRAINING",
+      "label": "Draining",
+      "kind": "derived",
+      "celery": {"state": "STARTED", "event": "worker-offline (while the task is still running)"},
+      "station": "running",
+      "phase": "active",
+      "tone": "warn",
+      "summary": "The worker announced shutdown but is still finishing this task.",
+      "detail": "Celery treats SIGTERM as a WARM shutdown: the worker emits worker-offline, stops taking new work, and lets in-flight tasks complete. If the orchestrator's stop grace period runs out first (docker stop, Kubernetes terminationGracePeriod), the process is killed and the task becomes Worker lost. This is why a deploy is usually safe and a Spot eviction is not.",
+      "settings": [
+        {"name": "task_acks_late", "why": "If the grace period expires mid-task, this decides whether the task is requeued.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.acks_late"}
+      ]
+    },
+    {
       "key": "SUSPECTED_HUNG",
       "label": "Suspected hung",
       "kind": "derived",
