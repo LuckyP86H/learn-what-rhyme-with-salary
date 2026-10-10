@@ -11,11 +11,11 @@ POST /calls ──▶ ingest_call ──▶ chord( group( analyze_chunk × N ) �
 
 | Piece | Tech | Role |
 |---|---|---|
-| Broker | RabbitMQ 3.13 | Delivers task messages; ack/requeue/dead-letter semantics are what we study |
-| Result backend | Redis 7 | Celery results + chord bookkeeping |
-| Durable state | PostgreSQL 15 | The workflow's source of truth (`calls`, `call_chunks`, `task_execution_log`) |
+| Broker | RabbitMQ 4.2 | Delivers task messages; ack/requeue/dead-letter semantics are what we study |
+| Result backend | Redis 8 | Celery results + chord bookkeeping |
+| Durable state | PostgreSQL 18 | The workflow's source of truth (`calls`, `call_chunks`, `task_execution_log`) |
 | API | FastAPI | Starts calls, exposes state, peeks at the DLQ |
-| Workers | Celery 5.6 | `worker-spot` (×2, kills target) · `worker-core` (ingest, merge, police) · `beat` |
+| Workers | Celery 5.6.3 on Python 3.14.5 | `worker-spot` (×2, kills target) · `worker-core` (ingest, merge, police) · `beat` |
 | Observability | Flower, JSON logs | http://localhost:5555 |
 
 ## Quick start
@@ -161,7 +161,7 @@ rescues the lost chunk. Read its docstring, then `COMPARISON.md` for why this pa
 
 ## Observed results
 
-> Measured on this repo (OrbStack, Celery 5.6.3, RabbitMQ 3.13). Timings vary run to run.
+> Measured on this repo (OrbStack, Python 3.14.5, Celery 5.6.3, RabbitMQ 4.2.9). Timings vary run to run.
 
 **Experiment 1: eviction of a worker mid-chunk (8 chunks, kill at 4 done)**
 
@@ -171,7 +171,7 @@ rescues the lost chunk. Read its docstring, then `COMPARISON.md` for why this pa
 | hardened | `term-kill` (2 s grace) | Same: cut off, re-queued, taken over | COMPLETED by itself |
 | hardened | `child` | Parent worker survived; `reject_on_worker_lost` requeued it; **same container** finished it | COMPLETED by itself |
 | hardened | `sigterm` | Warm shutdown: finished normally, then the container exited | COMPLETED; not a loss scenario |
-| **default** | `sigkill` | **Dropped**: message was ACKed at start, so RabbitMQ had nothing to requeue. Call sat **stuck** | COMPLETED only after the Task Police noticed and re-dispatched that one chunk in a new chord (~75 s) |
+| **default** | `sigkill` | **Dropped**: message was ACKed at start, so RabbitMQ had nothing to requeue. Call sat **stuck** | COMPLETED only after the Task Police noticed and re-dispatched that one chunk in a new chord (~85 s) |
 | **default** | `child` | `WorkerLostError`; task FAILED | Call **FAILED loudly** via the chord error callback (a different failure mode from the silent stall above) |
 
 Two things worth staring at in the default/`sigkill` run: only the *one running* chunk was lost
@@ -186,10 +186,10 @@ result but before ACKing, so RabbitMQ redelivered a finished chunk. The claim ch
 
 | `worker_prefetch_multiplier` | RabbitMQ *unacked* at start | Who ran what | Idle time | Total |
 |---|---|---|---|---|
-| 4 | **8** (each worker reserved 4) | A: `c0* c2* c4 c6`, B: `c1 c3 c5 c7` | **B idle ~30 s** while A ground through slow chunks | **61 s** |
-| 1 | **2** (only what is running), 6 still *ready* | A: `c0* c3 c5 c7`, B: `c1 c2* c4 c6` | ≤ 4 s | **49 s** |
+| 4 | **8** (each worker reserved 4) | A: `c0* c2* c4 c6`, B: `c1 c3 c5 c7` | **B idle ~34 s** while A ground through slow chunks | **61 s** |
+| 1 | **2** (only what is running), 6 still *ready* | A: `c0* c3 c5 c6`, B: `c1 c2* c4 c7` | ≤ 3 s | **47 s** |
 
-With 4, the work was pre-assigned round-robin before anyone knew chunks 0 and 2 were slow. With 1,
+With 4, the work was pre-assigned before anyone knew chunks 0 and 2 were slow. (The exact split varies run to run, but the idle worker does not.) With 1,
 whichever worker was free took the next message.
 
 **Experiment 3: the fault catalogue**
@@ -201,6 +201,18 @@ whichever worker was free took the next message.
 | `permanent` | Call FAILED; message in `dead_letter` with `reason: rejected` |
 | `crash` | Pool child SIGKILLed 4× and requeued each time by `reject_on_worker_lost`; attempts cap stopped the poison pill; call FAILED; message in the DLQ |
 | `bug` | Task FAILURE → `ChordError` → error callback marked the call FAILED |
+
+## Versions
+
+Everything is pinned: Python **3.14.5** (image `python:3.14.5-slim`), Python deps in `requirements.txt`
+(resolved on 3.14.5; all have prebuilt wheels), and infrastructure images in `docker-compose.yml`
+(RabbitMQ 4.2, Redis 8, PostgreSQL 18, Flower 2.2.0). The full experiment matrix was re-run on this set.
+
+Heads-up for anyone running Celery on RabbitMQ 4: the broker logs
+`Deprecated features: global_qos` and `transient_nonexcl_queues`. Those are the mechanisms Celery uses for
+prefetch and its event queues. They are still permitted in 4.2, but expect them to be removed in a later
+RabbitMQ release; quorum queues are the long-term direction. (RabbitMQ 4 also stopped reporting
+Celery's prefetch in its management API, which is why the prefetch demo shows the *unacked* count instead.)
 
 ## Precision notes (where common explanations of Celery need correcting)
 
@@ -227,7 +239,7 @@ folklore gets them wrong:
 ## Layout
 
 ```
-call-pipeline/
+.
 ├── docker-compose.yml        # rabbitmq, redis, postgres, bootstrap, api, worker-spot x2, worker-core, beat, flower
 ├── Dockerfile  requirements.txt  Makefile
 ├── config.py                 # env parsing, reliability profiles, queues, Celery config (read the comments!)
