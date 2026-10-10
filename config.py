@@ -23,6 +23,13 @@ def _env_opt(name: str) -> str | None:
     return os.environ.get(name) or None
 
 
+def _queue_type() -> str:
+    value = _env("QUEUE_TYPE", "classic").lower()
+    if value not in {"classic", "quorum"}:
+        raise ValueError(f"QUEUE_TYPE must be 'classic' or 'quorum', got {value!r}")
+    return value
+
+
 def _truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
@@ -37,6 +44,7 @@ class Settings:
     rabbitmq_user: str
     rabbitmq_password: str
     log_level: str
+    queue_type: str  # "classic" | "quorum"
 
     # --- reliability profile (see RELIABILITY_PROFILES) ----------------------------------------
     reliability_mode: str  # "hardened" | "default"
@@ -78,6 +86,7 @@ class Settings:
             rabbitmq_user=_env("RABBITMQ_USER", "pipeline"),
             rabbitmq_password=_env("RABBITMQ_PASSWORD", "pipeline"),
             log_level=_env("LOG_LEVEL", "INFO").upper(),
+            queue_type=_queue_type(),
             reliability_mode=mode,
             acks_late_override=opt_bool("CELERY_ACKS_LATE"),
             reject_on_worker_lost_override=opt_bool("CELERY_REJECT_ON_WORKER_LOST"),
@@ -122,19 +131,31 @@ settings = Settings.from_env()
 #   default           ingest + chord callback -> the "on-demand" worker (worker-core)
 #   priority          the Task Police sweep   -> same on-demand worker, never stuck behind chunks
 #   dead_letter       nobody consumes it; it is where rejected/poisoned messages are parked
-TASK_EXCHANGE = Exchange("tasks", type="direct")
-DEAD_LETTER_EXCHANGE = Exchange("dlx", type="direct")
+# Exchange type is "topic" (not "direct"): exact routing keys behave identically, but Celery's native
+# delayed delivery (the quorum-queue way to hold ETA/countdown tasks, i.e. our retry backoff) refuses
+# direct exchanges and silently falls back to blocking a worker slot until the ETA arrives.
+TASK_EXCHANGE = Exchange("tasks", type="topic")
+DEAD_LETTER_EXCHANGE = Exchange("dlx", type="topic")
 
 # Dead-lettering is a *queue argument*: when a consumer rejects a message with requeue=False,
 # RabbitMQ re-publishes it to this exchange instead of dropping it. Queue arguments are immutable
-# after declaration; changing them later needs `make reset` (otherwise PRECONDITION_FAILED).
+# after declaration; changing them (including the queue TYPE) needs a fresh broker, otherwise
+# RabbitMQ answers PRECONDITION_FAILED.
 _DLX_ARGS = {"x-dead-letter-exchange": "dlx", "x-dead-letter-routing-key": "dead"}
 
+# QUEUE_TYPE=quorum: the replicated, Raft-based queue type RabbitMQ and Celery recommend long term
+# (classic queues + global QoS are on the deprecation path). Behavioural differences that matter here:
+#   * Celery detects quorum queues and turns global QoS OFF, so prefetch becomes a static
+#     per-consumer limit (no autoscaling, no prefetch-count reduction);
+#   * ETA/countdown tasks (our retry backoff!) go through Celery's "native delayed delivery";
+#   * RabbitMQ enforces a delivery limit (x-delivery-limit, default 20): a broker-side poison-pill guard.
+_QUEUE_TYPE_ARGS = {"x-queue-type": "quorum"} if settings.queue_type == "quorum" else {}
+
 TASK_QUEUES = (
-    Queue("default", TASK_EXCHANGE, routing_key="default", queue_arguments=_DLX_ARGS),
-    Queue("heavy_processing", TASK_EXCHANGE, routing_key="heavy_processing", queue_arguments=_DLX_ARGS),
-    Queue("priority", TASK_EXCHANGE, routing_key="priority", queue_arguments=_DLX_ARGS),
-    Queue("dead_letter", DEAD_LETTER_EXCHANGE, routing_key="dead"),
+    Queue("default", TASK_EXCHANGE, routing_key="default", queue_arguments={**_DLX_ARGS, **_QUEUE_TYPE_ARGS}),
+    Queue("heavy_processing", TASK_EXCHANGE, routing_key="heavy_processing", queue_arguments={**_DLX_ARGS, **_QUEUE_TYPE_ARGS}),
+    Queue("priority", TASK_EXCHANGE, routing_key="priority", queue_arguments={**_DLX_ARGS, **_QUEUE_TYPE_ARGS}),
+    Queue("dead_letter", DEAD_LETTER_EXCHANGE, routing_key="dead", queue_arguments=dict(_QUEUE_TYPE_ARGS)),
 )
 
 TASK_ROUTES = {
@@ -160,6 +181,8 @@ def build_celery_config(s: Settings = settings) -> dict[str, Any]:
         "result_backend": s.result_backend,
         # Celery 5.x warns (and 6.x will refuse) if you rely on implicit "retry the broker at startup".
         "broker_connection_retry_on_startup": True,
+        # Quorum queues: wait for the broker to confirm each publish, so "published" means "durably accepted".
+        "broker_transport_options": {"confirm_publish": True} if s.queue_type == "quorum" else {},
         # Plain JSON everywhere: no pickle, so a poisoned message can't execute code on a worker.
         "task_serializer": "json",
         "result_serializer": "json",
@@ -217,9 +240,18 @@ def build_celery_config(s: Settings = settings) -> dict[str, Any]:
         "task_queues": TASK_QUEUES,
         "task_default_queue": "default",
         "task_default_exchange": "tasks",
-        "task_default_exchange_type": "direct",
+        "task_default_exchange_type": "topic",
         "task_default_routing_key": "default",
         "task_routes": TASK_ROUTES,
+
+        # ---- RabbitMQ 4.3+ compatibility -------------------------------------------------------------
+        # Celery's control (pidbox) and event queues default to durable=False AND exclusive=False. That
+        # combination is RabbitMQ's deprecated feature `transient_nonexcl_queues`, which 4.3 REFUSES by
+        # default. The failure is nasty: the worker process stays "Up" but loops on reconnect at the
+        # "mingle" step and never consumes a task. Making these queues exclusive (each is only ever used
+        # by one connection anyway) takes them out of the deprecated category.
+        "control_queue_exclusive": True,
+        "event_queue_exclusive": True,
 
         # We install our own JSON logging (app/logging_config.py); stop Celery hijacking the root logger.
         "worker_hijack_root_logger": False,

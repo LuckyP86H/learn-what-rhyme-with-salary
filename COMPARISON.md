@@ -43,7 +43,7 @@ dead-lettering, and unambiguous redelivery semantics. For a stateless "do this o
 | RabbitMQ `consumer_timeout` (30 min default) | With late acks, a task running longer than this has its channel closed by the broker. Relevant for long ETL backfills. | Not triggered here (chunks last seconds) |
 | Redis as the *broker* + `visibility_timeout` (1 h default) | Unacked messages are redelivered after an hour, so a long late-ack task gets duplicated. | We use RabbitMQ; Redis is only the result backend |
 | ETA / countdown tasks sit in worker memory | A retry with `countdown=60` is held by a worker (and counts against its prefetch) until due. | Keep countdowns short; see `backoff_seconds` |
-| RabbitMQ 4.x deprecations | Celery's prefetch (`global_qos`) and event queues (`transient_nonexcl_queues`) are flagged deprecated by the broker. Still permitted in 4.2, but a migration risk; quorum queues are the long-term path. | Documented in README "Versions" |
+| RabbitMQ 4.x deprecations | Celery's control/event queues (`transient_nonexcl_queues`) are **refused by RabbitMQ 4.3**: stock-config workers stop consuming while the process stays Up. Its prefetch mechanism (`global_qos`) is also on the deprecation path. | Two settings in `config.py`; full analysis in `docs/rabbitmq4-deprecations.md` |
 | Prefetch (default 4 × concurrency) | With RabbitMQ the reserved messages are *not lost* on a crash (they are unacked, so requeued); the damage is **unfair dispatch**: a busy worker hoards messages while a neighbour idles. | Experiment 3 |
 
 **Use it when** tasks are short or idempotent, the Python ecosystem matters, and you can accept

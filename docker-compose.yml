@@ -10,6 +10,7 @@ x-app-env: &app-env
   RABBITMQ_USER: pipeline
   RABBITMQ_PASSWORD: pipeline
   RELIABILITY_MODE: ${RELIABILITY_MODE:-hardened}
+  QUEUE_TYPE: ${QUEUE_TYPE:-classic}
   CELERY_ACKS_LATE: ${CELERY_ACKS_LATE:-}
   CELERY_REJECT_ON_WORKER_LOST: ${CELERY_REJECT_ON_WORKER_LOST:-}
   CELERY_PREFETCH_MULTIPLIER: ${CELERY_PREFETCH_MULTIPLIER:-}
@@ -31,7 +32,7 @@ x-app: &app
 services:
   # ---- infrastructure -------------------------------------------------------------------------------
   rabbitmq:
-    image: rabbitmq:4.2-management
+    image: rabbitmq:${RABBITMQ_VERSION:-4.3}-management
     environment:
       RABBITMQ_DEFAULT_USER: pipeline
       RABBITMQ_DEFAULT_PASS: pipeline
@@ -100,13 +101,13 @@ services:
     command: celery -A app.celery_app:celery_app beat -l INFO -s /tmp/celerybeat-schedule
 
   # ---- observability --------------------------------------------------------------------------------
+  # Runs from OUR image (not mher/flower) so it shares the project's Celery config, notably the
+  # exclusive event queue that RabbitMQ 4.3+ requires (see config.py, "RabbitMQ 4.3+ compatibility").
   flower:
-    image: mher/flower:2.2.0
-    command: celery --broker=amqp://pipeline:pipeline@rabbitmq:5672// flower --broker_api=http://pipeline:pipeline@rabbitmq:15672/api/ --port=5555
+    <<: *app
+    command: celery -A app.celery_app:celery_app flower --broker_api=http://pipeline:pipeline@rabbitmq:15672/api/ --port=5555
     ports:
       - "127.0.0.1:5555:5555" # loopback only: Flower has no auth here
-    depends_on:
-      rabbitmq: {condition: service_healthy}
 
 volumes:
   pgdata:

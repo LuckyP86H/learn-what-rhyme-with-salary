@@ -27,10 +27,7 @@ rmq_consumers() { # queue name -> consumer count
     python3 -c "import sys,json; print(json.load(sys.stdin).get('consumers',0))" 2>/dev/null || echo 0
 }
 
-apply_mode() { # reliability_mode [prefetch_multiplier]
-  echo ">>> switching the stack to RELIABILITY_MODE=$1 ${2:+CELERY_PREFETCH_MULTIPLIER=$2}"
-  RELIABILITY_MODE="$1" CELERY_PREFETCH_MULTIPLIER="${2:-}" \
-    docker compose up -d --force-recreate --no-deps api worker-spot worker-core beat >/dev/null 2>&1
+wait_ready() { # block until the API answers and the workers are consuming
   for _ in $(seq 1 60); do
     if curl -fs "$API/health" >/dev/null && [[ "$(rmq_consumers heavy_processing)" -ge 2 && "$(rmq_consumers default)" -ge 1 ]]; then
       sleep 2; return 0
@@ -40,10 +37,19 @@ apply_mode() { # reliability_mode [prefetch_multiplier]
   echo "workers did not come up; try: docker compose logs worker-spot" >&2; exit 1
 }
 
+apply_mode() { # reliability_mode [prefetch_multiplier]
+  echo ">>> switching the stack to RELIABILITY_MODE=$1 ${2:+CELERY_PREFETCH_MULTIPLIER=$2}"
+  RELIABILITY_MODE="$1" CELERY_PREFETCH_MULTIPLIER="${2:-}" \
+    docker compose up -d --force-recreate --no-deps api worker-spot worker-core beat >/dev/null 2>&1
+  wait_ready
+}
+
 restore() {
   echo ">>> restoring hardened mode"
   RELIABILITY_MODE=hardened CELERY_PREFETCH_MULTIPLIER="" STALL_THRESHOLD_SECONDS="" POLICE_INTERVAL_SECONDS="" \
     docker compose up -d --force-recreate --no-deps api worker-spot worker-core beat >/dev/null 2>&1 || true
+  # Wait too, so whatever runs next (another scenario, or you) does not hit a half-started stack.
+  wait_ready || true
 }
 trap restore EXIT
 

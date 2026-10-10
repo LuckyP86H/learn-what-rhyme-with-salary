@@ -74,3 +74,31 @@ def test_every_registered_task_has_a_route():
     celery_app.loader.import_default_modules()
     ours = {name for name in celery_app.tasks if name.startswith("tasks.")}
     assert ours == set(TASK_ROUTES)
+
+
+# ---- RabbitMQ 4.3+ compatibility (see docs/rabbitmq4-deprecations.md) ---------------------------
+def test_control_and_event_queues_are_exclusive(monkeypatch):
+    # RabbitMQ 4.3 refuses non-durable + non-exclusive queues (deprecated feature transient_nonexcl_queues).
+    # Celery's defaults for these queues are exactly that, and with them workers loop on reconnect
+    # while the process stays "Up". Removing these two settings re-breaks every worker on RabbitMQ 4.3.
+    c = conf(monkeypatch)
+    assert c["control_queue_exclusive"] is True
+    assert c["event_queue_exclusive"] is True
+
+
+def test_exchanges_are_topic_so_quorum_native_delayed_delivery_works():
+    # Celery's native delayed delivery (how ETA/countdown tasks work on quorum queues) refuses direct
+    # exchanges and silently blocks a worker slot instead.
+    assert {q.exchange.type for q in TASK_QUEUES} == {"topic"}
+
+
+def test_queue_type_defaults_to_classic_and_validates(monkeypatch):
+    monkeypatch.delenv("QUEUE_TYPE", raising=False)
+    assert Settings.from_env().queue_type == "classic"
+    assert conf(monkeypatch)["broker_transport_options"] == {}
+    monkeypatch.setenv("QUEUE_TYPE", "quorum")
+    assert Settings.from_env().queue_type == "quorum"
+    assert build_celery_config(Settings.from_env())["broker_transport_options"] == {"confirm_publish": True}
+    monkeypatch.setenv("QUEUE_TYPE", "stream")
+    with pytest.raises(ValueError):
+        Settings.from_env()
