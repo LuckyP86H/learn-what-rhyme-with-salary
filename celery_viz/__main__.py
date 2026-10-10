@@ -22,7 +22,8 @@ from celery_viz.store import RunStore
 
 def build(args: argparse.Namespace):
     config = VizConfig(hung_after_seconds=args.hung_after, max_runs=args.max_runs,
-                       min_lost_after_seconds=args.lost_after, drain_grace_seconds=args.drain_grace)
+                       min_lost_after_seconds=args.lost_after, drain_grace_seconds=args.drain_grace,
+                       ignore_tasks=tuple(args.ignore_task))
     policy = RedactionPolicy(keep_args=args.keep_args, keep_result=args.keep_result)
     ui_dir = Path(args.ui_dir) if args.ui_dir else Path(__file__).with_name("ui_dist")
     catalog = load_catalog(args.catalog) if args.catalog else None
@@ -52,6 +53,7 @@ def main() -> None:
     ap.add_argument("--queue-metrics-url", help="RabbitMQ Prometheus endpoint for measured ready/unacked, e.g. http://rabbitmq:15692/metrics/detailed?family=queue_coarse_metrics")
     ap.add_argument("--catalog", help="enable launching: 'package.module:object' providing describe()/launch(). Off by default (read-only)")
     ap.add_argument("--ui-dir", help="directory with the built UI (default: celery_viz/ui_dist when present)")
+    ap.add_argument("--ignore-task", action="append", default=[], metavar="NAME", help="drop this task name entirely (repeatable), e.g. a periodic sweep that would flood the run list")
     ap.add_argument("--max-runs", type=int, default=500)
     ap.add_argument("--keep-args", action="store_true", help="keep task args/kwargs (default: dropped; may contain personal data)")
     ap.add_argument("--keep-result", action="store_true", help="keep task results (default: dropped)")

@@ -113,11 +113,18 @@ services:
     ports:
       - "127.0.0.1:5555:5555" # loopback only: Flower has no auth here
 
-  # Read-only workflow visualizer API (celery_viz). Observes the broker's event stream; it never
-  # publishes a task. Loopback only: the API has no authentication.
+  # Workflow visualizer (celery_viz): API + built UI on http://localhost:8200. It observes the broker's
+  # event stream and is read-only, EXCEPT that --catalog enables launching the demo scenarios
+  # (app/viz_catalog.py); only those named scenarios can run. Remove that flag for pure read-only.
+  # Loopback only: there is no authentication.
   viz:
     <<: *app
-    command: python -m celery_viz --host 0.0.0.0 --port 8200 --hung-after 20 --lost-after 6 --drain-grace 30
+    command: >-
+      python -m celery_viz --host 0.0.0.0 --port 8200
+      --hung-after 20 --lost-after 6 --drain-grace 30
+      --ignore-task tasks.police_sweep
+      --catalog app.viz_catalog:catalog
+      --queue-metrics-url http://rabbitmq:15692/metrics/detailed?family=queue_coarse_metrics
     ports:
       - "127.0.0.1:${VIZ_PORT:-8200}:8200"
 

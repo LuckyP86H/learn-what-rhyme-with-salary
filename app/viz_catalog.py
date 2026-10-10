@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from celery import chain, group
+from celery import chain
 
 from app import calls
 from app.tasks import meeting
@@ -49,9 +49,7 @@ class DemoCatalog:
             result = chain(meeting.transcribe.s(mid), meeting.summarize.s(fault), meeting.extract_actions.s()).apply_async()
             return {"root_id": result.parent.parent.id if result.parent and result.parent.parent else result.id}
         if scenario_id == "group":
-            sigs = [meeting.translate.s(mid, lang, fault if i == 0 else None) for i, lang in enumerate(("es", "de", "ja"))]
-            group(sigs).apply_async()
-            return {"meeting": mid}
+            return {"root_id": meeting.translate_all.apply_async((mid, fault)).id}
         if scenario_id == "chord":
             n = int(params["chunks"])
             faults = {} if fault is None else {str(min(1, n - 1)): fault}

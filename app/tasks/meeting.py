@@ -10,7 +10,7 @@ import random
 import time
 from typing import Any
 
-from celery import Task
+from celery import Task, group
 
 from app.celery_app import celery_app
 from app.errors import TransientError
@@ -63,3 +63,17 @@ def translate(self: Task, meeting_id: str, language: str, fault: str | None = No
     """One of several independent translations run at the same time (a group)."""
     took = _work(self, 3, 7, fault, f"{meeting_id}:{language}")
     return {"meeting": meeting_id, "language": language, "seconds": round(took, 1)}
+
+
+LANGUAGES = ("es", "de", "ja")
+
+
+@celery_app.task(bind=True, name="tasks.meeting_translate_all")
+def translate_all(self: Task, meeting_id: str, fault: str | None = None) -> None:
+    """Fan out one translation per language and replace ourselves with the group.
+
+    Why a parent task at all: a group submitted straight from a client gives every task its OWN root id
+    (Celery reports no shared group id in events), so a monitor could not tell they belong together.
+    Fanning out from a parent keeps one root, which is also how the call pipeline's ingest_call works.
+    """
+    raise self.replace(group(translate.s(meeting_id, lang, fault if i == 0 else None) for i, lang in enumerate(LANGUAGES)))

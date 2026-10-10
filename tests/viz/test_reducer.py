@@ -283,3 +283,13 @@ def test_a_worker_that_comes_back_is_no_longer_draining():
     store.apply({"type": "worker-online", "hostname": "w@1", "freq": 2, "timestamp": 13.0, "local_received": 13.0})
     assert store.workers["w@1"].offline_since_local is None
     assert effective_state(task, store, 14.0)[0] == "STARTED"
+
+
+def test_ignored_task_names_vanish_including_their_later_nameless_events():
+    from celery_viz.config import VizConfig
+
+    store = RunStore(VizConfig(ignore_tasks=("t.noise",)))
+    for etype, extra in (("task-sent", {"name": "t.noise", "root_id": "n"}), ("task-received", {"name": "t.noise", "root_id": "n"}), ("task-started", {}), ("task-succeeded", {"runtime": 0.1})):
+        store.apply({"type": etype, "uuid": "n", "hostname": "w@1", "retries": 0, "timestamp": 1.0, "local_received": 1.0, **extra})
+    store.apply({"type": "task-sent", "uuid": "real", "name": "t.real", "root_id": "real", "retries": 0, "timestamp": 2.0, "local_received": 2.0})
+    assert set(store.tasks) == {"real:0"}, "started/succeeded carry no name, so the remembered id must be what filters them"

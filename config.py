@@ -170,6 +170,7 @@ TASK_ROUTES = {
     "tasks.meeting_summarize": {"queue": "default"},
     "tasks.meeting_extract_actions": {"queue": "default"},
     "tasks.meeting_translate": {"queue": "heavy_processing"},
+    "tasks.meeting_translate_all": {"queue": "default"},
 }
 
 
