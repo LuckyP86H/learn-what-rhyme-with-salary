@@ -6,7 +6,7 @@ export API_PORT API
 
 .DEFAULT_GOAL := help
 .PHONY: help up down reset logs ps wait trigger trigger-retry trigger-bad trigger-poison trigger-bug status events dlq config \
-        test-spot test-spot-default test-prefetch test flower rabbitmq police-now psql
+        lint lint-fix test-spot test-spot-default test-prefetch test flower rabbitmq police-now psql
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -73,6 +73,12 @@ test-spot-default: ## same test against Celery's STOCK defaults (expect: work lo
 
 test-prefetch: ## prefetch_multiplier=4 vs 1: watch workers hoard messages vs share fairly
 	./scripts/test_spot_failure.sh prefetch
+
+lint: ## check Python import ordering with Ruff
+	ruff check .
+
+lint-fix: ## automatically organize Python imports with Ruff
+	ruff check --fix .
 
 test: ## unit tests (inside the app image)
 	$(COMPOSE) run --rm --no-deps -T api python -m pytest -q -p no:cacheprovider

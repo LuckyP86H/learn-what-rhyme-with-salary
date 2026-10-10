@@ -34,6 +34,34 @@ make help         # every command
 | http://localhost:5555 | Flower: live tasks and workers |
 | http://localhost:15672 | RabbitMQ UI (`pipeline` / `pipeline`): watch *Ready* vs *Unacked* per queue |
 
+## Python development checks
+
+Ruff enforces sorted imports (`I001`). For VS Code auto-fix on save, install the Ruff extension and
+add this to workspace settings. (`.vscode` is gitignored here, so this setting is local.)
+
+```json
+{
+  "[python]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  }
+}
+```
+
+To check or fix imports from the terminal:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+make lint       # fail if imports are unsorted
+make lint-fix   # automatically sort/fix imports
+.venv/bin/python -m pytest -q
+```
+
+The GitHub Actions lint check runs `make lint` on pushes and pull requests.
+
 ## How the pipeline works
 
 1. **`POST /calls`** inserts a `calls` row, then publishes `tasks.ingest_call(call_id)`.
