@@ -5,7 +5,7 @@ broker message is not a durable record of "this work must finish". If a message 
 worker death, an expired queue, a purged broker) Celery never finds out, so something outside Celery
 has to notice that a call has made no progress and push it again.
 
-Compare with Temporal (see COMPARISON.md): there the workflow history IS the durable record, and an
+Compare with Temporal (see docs/comparison.md): there the workflow history IS the durable record, and an
 activity that stops heartbeating is rescheduled by the server itself. No police required.
 
 Caveats you can see in this file:

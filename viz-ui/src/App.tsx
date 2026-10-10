@@ -1,3 +1,4 @@
+// The page: wires the live stream, polled panels and selection state together.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "./components/Canvas";
 import { Inspector } from "./components/Inspector";

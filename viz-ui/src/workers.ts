@@ -1,3 +1,4 @@
+// Hides long-dead workers so the worker list does not fill with ghosts.
 import type { WorkerView } from "./types";
 
 /**

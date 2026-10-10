@@ -1,3 +1,4 @@
+// Side panels: the run list, the workers, and the measured queue depths.
 import { fmtDuration, shortHost, shortName } from "../format";
 import type { ConfigResponse, QueuesResponse, RunSummary, WorkerView } from "../types";
 import { splitWorkers } from "../workers";

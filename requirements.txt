@@ -7,6 +7,8 @@ uvicorn[standard]==0.54.0
 sqlalchemy==2.1.4
 psycopg[binary]==3.3.6
 httpx==0.28.1
+prometheus-client==0.26.0
+pyyaml==6.0.3  # reads docker-compose.yml for the generated docs
 # tests and import linting
 pytest==9.1.1
 ruff==0.17.0

@@ -40,7 +40,7 @@ def build(args: argparse.Namespace):
     return app, source
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="celery_viz", description="Read-only Celery workflow visualizer.")
     ap.add_argument("--broker", default=os.environ.get("BROKER_URL"), help="broker URL of the Celery deployment to observe")
     ap.add_argument("--replay", help="replay a recorded events file (one JSON object per line) instead of connecting")
@@ -57,7 +57,11 @@ def main() -> None:
     ap.add_argument("--max-runs", type=int, default=500)
     ap.add_argument("--keep-args", action="store_true", help="keep task args/kwargs (default: dropped; may contain personal data)")
     ap.add_argument("--keep-result", action="store_true", help="keep task results (default: dropped)")
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> None:
+    args = build_parser().parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     app, source = build(args)
     source.start()

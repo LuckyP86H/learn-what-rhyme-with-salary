@@ -7,7 +7,7 @@ export API_PORT POSTGRES_PORT API
 
 .DEFAULT_GOAL := help
 .PHONY: help up down reset logs ps wait trigger trigger-retry trigger-bad trigger-poison trigger-bug status events dlq config \
-        lint lint-fix test-spot test-spot-default test-prefetch viz-check ui ui-test test flower rabbitmq police-now psql
+        lint lint-fix test-spot test-spot-default test-prefetch viz-check ui ui-test docs docs-check test flower rabbitmq police-now psql
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -92,8 +92,14 @@ ui: ## build the visualizer UI into celery_viz/ui_dist (in a Node container; not
 ui-test: ## UI typecheck + unit tests (in a Node container)
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:24-slim sh -c "npm ci --no-audit --no-fund && npm run typecheck && npm test"
 
-test: ## unit tests (inside the app image)
-	$(COMPOSE) run --rm --no-deps -T api python -m pytest -q -p no:cacheprovider
+test: ## Python unit tests, run against the working tree (not the copy baked into the image)
+	$(COMPOSE) run --rm --no-deps -T -v "$$PWD":/srv api python -m pytest -q -p no:cacheprovider
+
+docs: ## regenerate docs/reference/* from the code, config and compose file
+	$(COMPOSE) run --rm --no-deps -T -v "$$PWD":/srv api python scripts/gen_docs.py
+
+docs-check: ## fail if generated docs are stale or hand-written docs mention things that no longer exist
+	$(COMPOSE) run --rm --no-deps -T -v "$$PWD":/srv api python -m pytest -q -p no:cacheprovider tests/test_docs.py
 
 police-now: ## run one police sweep immediately instead of waiting for beat
 	$(COMPOSE) exec worker-core celery -A app.celery_app:celery_app call tasks.police_sweep

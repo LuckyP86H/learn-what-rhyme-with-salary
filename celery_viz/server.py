@@ -120,21 +120,25 @@ def create_app(store: RunStore, source: Any | None = None, mode: str = "live", *
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
+        """Is the monitor up, is it connected to the broker, and how much has it seen? `dropped_events` counts events discarded because a run grew too large."""
         return {"status": "ok", "mode": mode, "runs": len(store.runs), "tasks": len(store.tasks), "workers": len(store.workers),
                 "dropped_events": store.dropped, "source": source.status() if source else None}
 
     @app.get("/api/states")
     def states() -> dict[str, Any]:
+        """The state table (`states.json`) the UI renders: every task state, its stage, what it means and the settings that change it."""
         return load_states().to_json()
 
     @app.get("/api/runs")
     def runs(limit: int = 50) -> list[dict[str, Any]]:
+        """Summaries of the most recent runs, newest first. A run is a root task and everything it spawned."""
         with store.lock:
             ordered = sorted(store.runs.values(), key=lambda r: r.updated_local, reverse=True)[: max(1, min(limit, 500))]
             return [run_summary(store, r) for r in ordered]
 
     @app.get("/api/runs/{run_id}")
     def run(run_id: str) -> dict[str, Any]:
+        """One run in full: its tasks (each with a timeline) and the edges between them, including inferred join edges. 404 if the run was evicted from the bounded store."""
         with store.lock:
             found = store.runs.get(run_id)
             if found is None:
@@ -143,6 +147,7 @@ def create_app(store: RunStore, source: Any | None = None, mode: str = "live", *
 
     @app.get("/api/workers")
     def workers() -> list[dict[str, Any]]:
+        """Workers seen, with status `online`, `offline` (announced shutdown) or `lost` (silent for too long), and their own heartbeat period."""
         with store.lock:
             return workers_view(store)
 
@@ -165,10 +170,12 @@ def create_app(store: RunStore, source: Any | None = None, mode: str = "live", *
 
     @app.get("/api/catalog")
     def get_catalog() -> dict[str, Any]:
+        """The demo scenarios that can be launched, or `enabled: false` when the monitor runs read-only."""
         return {"enabled": catalog is not None, "scenarios": catalog.describe() if catalog else []}
 
     @app.post("/api/launch", status_code=202)
     def launch(body: LaunchRequest) -> dict[str, Any]:
+        """Start a named demo scenario. Only available when the monitor was started with `--catalog`; unknown scenarios are 404 and invalid parameters 422. There is no way to send an arbitrary task."""
         if catalog is None:
             raise HTTPException(404, "launching is disabled: start celery_viz with --catalog to enable it")
         scenario = next((s for s in catalog.describe() if s["id"] == body.scenario), None)
@@ -182,6 +189,7 @@ def create_app(store: RunStore, source: Any | None = None, mode: str = "live", *
 
     @app.get("/api/stream")
     async def stream(request: Request) -> StreamingResponse:
+        """Server-Sent Events: one `snapshot` event, then `run` (full view of any run that changed) and `workers` events."""
         return StreamingResponse(
             event_stream(store, request.is_disconnected),
             media_type="text/event-stream",

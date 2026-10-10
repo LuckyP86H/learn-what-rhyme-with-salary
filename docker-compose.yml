@@ -9,15 +9,15 @@ x-app-env: &app-env
   RABBITMQ_API_URL: http://rabbitmq:15672/api
   RABBITMQ_USER: pipeline
   RABBITMQ_PASSWORD: pipeline
-  RELIABILITY_MODE: ${RELIABILITY_MODE:-hardened}
-  QUEUE_TYPE: ${QUEUE_TYPE:-classic}
-  CELERY_ACKS_LATE: ${CELERY_ACKS_LATE:-}
-  CELERY_REJECT_ON_WORKER_LOST: ${CELERY_REJECT_ON_WORKER_LOST:-}
-  CELERY_PREFETCH_MULTIPLIER: ${CELERY_PREFETCH_MULTIPLIER:-}
-  STALL_THRESHOLD_SECONDS: ${STALL_THRESHOLD_SECONDS:-120}
-  POLICE_INTERVAL_SECONDS: ${POLICE_INTERVAL_SECONDS:-60}
-  CHUNK_MIN_SECONDS: ${CHUNK_MIN_SECONDS:-5}
-  CHUNK_MAX_SECONDS: ${CHUNK_MAX_SECONDS:-10}
+  RELIABILITY_MODE: ${RELIABILITY_MODE:-hardened}  # hardened = acks_late + reject_on_worker_lost + prefetch 1; default = Celery's stock settings
+  QUEUE_TYPE: ${QUEUE_TYPE:-classic}  # classic or quorum queues (needs a fresh broker: `make reset`)
+  CELERY_ACKS_LATE: ${CELERY_ACKS_LATE:-}  # override task_acks_late alone (true/false); empty = follow RELIABILITY_MODE
+  CELERY_REJECT_ON_WORKER_LOST: ${CELERY_REJECT_ON_WORKER_LOST:-}  # override task_reject_on_worker_lost alone; empty = follow RELIABILITY_MODE
+  CELERY_PREFETCH_MULTIPLIER: ${CELERY_PREFETCH_MULTIPLIER:-}  # override worker_prefetch_multiplier alone; empty = follow RELIABILITY_MODE
+  STALL_THRESHOLD_SECONDS: ${STALL_THRESHOLD_SECONDS:-120}  # the Task Police re-dispatch a call with no progress for this long
+  POLICE_INTERVAL_SECONDS: ${POLICE_INTERVAL_SECONDS:-60}  # how often beat runs the Task Police sweep
+  CHUNK_MIN_SECONDS: ${CHUNK_MIN_SECONDS:-5}  # shortest simulated chunk-analysis time
+  CHUNK_MAX_SECONDS: ${CHUNK_MAX_SECONDS:-10}  # longest simulated chunk-analysis time
 
 x-app: &app
   build: .
@@ -32,7 +32,9 @@ x-app: &app
 services:
   # ---- infrastructure -------------------------------------------------------------------------------
   rabbitmq:
-    image: rabbitmq:${RABBITMQ_VERSION:-4.3}-management
+    labels:
+      description: "Message broker. Delivers task messages; its ack, requeue and dead-letter behaviour is what the experiments study."
+    image: rabbitmq:${RABBITMQ_VERSION:-4.3}-management  # broker version to run, e.g. 4.2
     environment:
       RABBITMQ_DEFAULT_USER: pipeline
       RABBITMQ_DEFAULT_PASS: pipeline
@@ -45,6 +47,8 @@ services:
       retries: 20
 
   redis:
+    labels:
+      description: "Celery result backend; also holds the chord's bookkeeping."
     image: redis:8-alpine
     ports:
       - "127.0.0.1:${REDIS_PORT:-6380}:6379" # 6380, not 6379: a native redis-server often owns 6379 and silently shadows the container
@@ -55,13 +59,15 @@ services:
       retries: 20
 
   postgres:
+    labels:
+      description: "Durable workflow state (calls, call_chunks, task_execution_log): the source of truth that tasks claim work against."
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: pipeline
       POSTGRES_PASSWORD: pipeline
       POSTGRES_DB: pipeline
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"  # host port for DB clients
     volumes:
       - pgdata:/var/lib/postgresql  # PG 18+ keeps versioned data dirs under here
     healthcheck:
@@ -72,6 +78,8 @@ services:
 
   # Creates the DB schema and declares the RabbitMQ exchanges/queues (incl. the dead-letter topology).
   bootstrap:
+    labels:
+      description: "One-shot setup: creates the database schema and declares the RabbitMQ exchanges and queues, including the dead-letter topology."
     <<: *app
     command: python -m app.bootstrap
     depends_on:
@@ -81,6 +89,8 @@ services:
 
   # ---- application ----------------------------------------------------------------------------------
   api:
+    labels:
+      description: "The pipeline's HTTP API: starts calls, exposes their state, peeks at the dead-letter queue."
     <<: *app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
@@ -89,6 +99,8 @@ services:
   # The "Spot fleet": only consumes heavy_processing, 2 containers x 1 process each. This is what
   # chaos/spot_killer.py kills. One process per container makes prefetch behaviour easy to see.
   worker-spot:
+    labels:
+      description: "The 'Spot fleet': consumes heavy_processing, 2 containers of 1 process each. The chaos scripts kill these."
     <<: *app
     command: celery -A app.celery_app:celery_app worker -Q heavy_processing -c 1 -n spot@%h -l INFO
     deploy:
@@ -97,10 +109,14 @@ services:
 
   # The "on-demand" worker: ingest, the chord callback and the police. Never evicted.
   worker-core:
+    labels:
+      description: "The 'on-demand' worker: runs ingest, the chord callback and the Task Police. Never evicted."
     <<: *app
     command: celery -A app.celery_app:celery_app worker -Q default,priority -c 2 -n core@%h -l INFO
 
   beat:
+    labels:
+      description: "Celery's scheduler: publishes the Task Police sweep periodically."
     <<: *app
     command: celery -A app.celery_app:celery_app beat -l INFO -s /tmp/celerybeat-schedule
 
@@ -108,6 +124,8 @@ services:
   # Runs from OUR image (not mher/flower) so it shares the project's Celery config, notably the
   # exclusive event queue that RabbitMQ 4.3+ requires (see config.py, "RabbitMQ 4.3+ compatibility").
   flower:
+    labels:
+      description: "Fleet-level dashboard and Prometheus metrics (aggregates, not per-workflow). Runs from the project image so it shares the Celery config."
     <<: *app
     command: celery -A app.celery_app:celery_app flower --broker_api=http://pipeline:pipeline@rabbitmq:15672/api/ --port=5555
     ports:
@@ -118,6 +136,8 @@ services:
   # (app/viz_catalog.py); only those named scenarios can run. Remove that flag for pure read-only.
   # Loopback only: there is no authentication.
   viz:
+    labels:
+      description: "The workflow visualizer: API plus web UI. Observes the event stream; launching demo scenarios is opt-in (--catalog)."
     <<: *app
     command: >-
       python -m celery_viz --host 0.0.0.0 --port 8200
@@ -126,7 +146,7 @@ services:
       --catalog app.viz_catalog:catalog
       --queue-metrics-url http://rabbitmq:15692/metrics/detailed?family=queue_coarse_metrics
     ports:
-      - "127.0.0.1:${VIZ_PORT:-8200}:8200"
+      - "127.0.0.1:${VIZ_PORT:-8200}:8200"  # host port of the visualizer
 
 volumes:
   pgdata:

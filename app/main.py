@@ -77,6 +77,7 @@ def _call_dict(call: Call, with_chunks: bool = True) -> dict[str, Any]:
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    """Liveness: answers if the API process is up."""
     return {"status": "ok"}
 
 
@@ -101,6 +102,7 @@ def reliability_config() -> dict[str, Any]:
 
 @app.post("/calls", status_code=202)
 def create_call(body: CreateCall) -> dict[str, Any]:
+    """Start a call pipeline. Saves the call, then queues its ingest task; returns immediately with the call id (status PENDING). Optional `faults` inject a failure into a chunk, e.g. `{"2": "crash"}`."""
     try:
         call_id = start_call(body.title, body.num_chunks, {str(k): v for k, v in body.faults.items()})
     except PublishFailed as exc:  # broker down: the row exists as PENDING and the police will recover it
@@ -112,6 +114,7 @@ def create_call(body: CreateCall) -> dict[str, Any]:
 
 @app.get("/calls")
 def list_calls(limit: int = 20) -> list[dict[str, Any]]:
+    """The most recent calls (newest first), without their chunks."""
     with session_scope() as s:
         calls = s.scalars(select(Call).order_by(Call.created_at.desc()).limit(min(limit, 100))).all()
         return [_call_dict(c, with_chunks=False) for c in calls]
@@ -119,6 +122,7 @@ def list_calls(limit: int = 20) -> list[dict[str, Any]]:
 
 @app.get("/calls/{call_id}")
 def get_call(call_id: str) -> dict[str, Any]:
+    """One call with every chunk: status, attempts, which worker ran it, progress and the last error."""
     with session_scope() as s:
         call = s.get(Call, call_id)
         if call is None:

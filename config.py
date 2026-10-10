@@ -37,13 +37,13 @@ def _truthy(value: str) -> bool:
 @dataclass(frozen=True)
 class Settings:
     # --- infrastructure -----------------------------------------------------------------------
-    database_url: str
-    broker_url: str
-    result_backend: str
-    rabbitmq_api_url: str
-    rabbitmq_user: str
-    rabbitmq_password: str
-    log_level: str
+    database_url: str  # SQLAlchemy URL of the durable workflow state
+    broker_url: str  # AMQP URL of the broker
+    result_backend: str  # where Celery stores results and chord bookkeeping
+    rabbitmq_api_url: str  # RabbitMQ management API (used to peek at the dead-letter queue)
+    rabbitmq_user: str  # management API user
+    rabbitmq_password: str  # management API password (a documented dev default)
+    log_level: str  # Python logging level for the JSON logs
     queue_type: str  # "classic" | "quorum"
 
     # --- reliability profile (see RELIABILITY_PROFILES) ----------------------------------------
@@ -54,19 +54,19 @@ class Settings:
 
     # --- pipeline behaviour ---------------------------------------------------------------------
     chunk_min_seconds: float  # simulated "transcription + diarization" time per chunk
-    chunk_max_seconds: float
+    chunk_max_seconds: float  # longest simulated chunk time
     slow_chunk_seconds: float  # duration of a chunk carrying the "slow" fault
     heartbeat_interval: float  # how often a running chunk renews its lease
     lease_seconds: float  # a PROCESSING chunk with a heartbeat older than this is considered orphaned
     lease_retry_seconds: float  # how long a duplicate delivery waits before re-checking a busy chunk
     max_attempts: int  # per-chunk executions (incl. crashes/redeliveries) before it goes to the DLQ
-    retry_backoff_base: float
-    retry_backoff_max: float
+    retry_backoff_base: float  # transient-error retries wait base**attempt seconds (2, 4, 8, ...)
+    retry_backoff_max: float  # ...capped at this many seconds
 
     # --- task police ------------------------------------------------------------------------------
-    police_interval_seconds: float
-    stall_threshold_seconds: float
-    max_recoveries: int
+    police_interval_seconds: float  # how often beat runs the Task Police sweep
+    stall_threshold_seconds: float  # a call with no progress for this long is re-dispatched
+    max_recoveries: int  # police re-dispatches per call before it is marked FAILED
 
     @classmethod
     def from_env(cls) -> Settings:

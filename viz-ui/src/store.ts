@@ -1,3 +1,4 @@
+// Pure reducer that folds the server's live messages into the UI's state.
 import type { RunSummary, RunView, StateTable, WorkerView } from "./types";
 
 export interface StreamState {

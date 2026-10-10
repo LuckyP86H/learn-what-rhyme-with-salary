@@ -1,3 +1,5 @@
+"""Thresholds and limits for the monitor (how long silence means lost, memory bounds, ignored tasks)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

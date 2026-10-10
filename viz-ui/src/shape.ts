@@ -1,3 +1,4 @@
+// Works out a run's shape (single / chain / parallel / fan-out then join) and row layout from its task graph alone.
 import type { Edge, RunView, TaskView } from "./types";
 
 export type ShapeKind = "single" | "chain" | "parallel" | "fanout_join";

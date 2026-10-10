@@ -1,3 +1,4 @@
+// Explains the selected task or state in Celery terms, with the live values of the settings that affect it.
 import { fmtDuration, shortHost, shortName } from "../format";
 import type { ConfigResponse, StateInfo, StateTable, TaskView } from "../types";
 

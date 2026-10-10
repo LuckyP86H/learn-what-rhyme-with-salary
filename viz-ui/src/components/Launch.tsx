@@ -1,3 +1,4 @@
+// Launches the demo scenarios the backend's catalog offers (only shown when the catalog is enabled).
 import { useState } from "react";
 import type { CatalogResponse, Scenario } from "../types";
 

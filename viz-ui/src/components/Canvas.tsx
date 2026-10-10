@@ -1,3 +1,4 @@
+// The lanes: one row per task with a ball that moves between lifecycle stages.
 import { fmtDuration, shortHost, shortId, shortName } from "../format";
 import type { Analysis } from "../shape";
 import type { StateInfo, StateTable, TaskView } from "../types";
