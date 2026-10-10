@@ -11,7 +11,7 @@ POST /calls ──▶ ingest_call ──▶ chord( group( analyze_chunk × N ) �
 
 | Piece | Tech | Role |
 |---|---|---|
-| Broker | RabbitMQ 4.2 | Delivers task messages; ack/requeue/dead-letter semantics are what we study |
+| Broker | RabbitMQ 4.3 | Delivers task messages; ack/requeue/dead-letter semantics are what we study |
 | Result backend | Redis 8 | Celery results + chord bookkeeping |
 | Durable state | PostgreSQL 18 | The workflow's source of truth (`calls`, `call_chunks`, `task_execution_log`) |
 | API | FastAPI | Starts calls, exposes state, peeks at the DLQ |
@@ -161,7 +161,7 @@ rescues the lost chunk. Read its docstring, then `COMPARISON.md` for why this pa
 
 ## Observed results
 
-> Measured on this repo (OrbStack, Python 3.14.5, Celery 5.6.3, RabbitMQ 4.2.9). Timings vary run to run.
+> Measured on this repo (OrbStack, Python 3.14.5, Celery 5.6.3, RabbitMQ 4.2.9 and 4.3.6; results were consistent across both). Timings vary run to run.
 
 **Experiment 1: eviction of a worker mid-chunk (8 chunks, kill at 4 done)**
 
@@ -206,13 +206,17 @@ whichever worker was free took the next message.
 
 Everything is pinned: Python **3.14.5** (image `python:3.14.5-slim`), Python deps in `requirements.txt`
 (resolved on 3.14.5; all have prebuilt wheels), and infrastructure images in `docker-compose.yml`
-(RabbitMQ 4.2, Redis 8, PostgreSQL 18, Flower 2.2.0). The full experiment matrix was re-run on this set.
+(RabbitMQ 4.3, Redis 8, PostgreSQL 18). Flower 2.2.0 runs from the project image so it shares the Celery config.
 
-Heads-up for anyone running Celery on RabbitMQ 4: the broker logs
-`Deprecated features: global_qos` and `transient_nonexcl_queues`. Those are the mechanisms Celery uses for
-prefetch and its event queues. They are still permitted in 4.2, but expect them to be removed in a later
-RabbitMQ release; quorum queues are the long-term direction. (RabbitMQ 4 also stopped reporting
-Celery's prefetch in its management API, which is why the prefetch demo shows the *unacked* count instead.)
+**RabbitMQ 4 is deprecating two things Celery uses by default**, and RabbitMQ 4.3 already refuses one of
+them: with stock Celery settings the workers silently stop consuming while the container stays "Up".
+`config.py` carries the two-line fix. What it means, how big the risk is, and the migration path
+(quorum queues) are in **[docs/rabbitmq4-deprecations.md](docs/rabbitmq4-deprecations.md)**.
+
+```bash
+RABBITMQ_VERSION=4.2 make reset up   # run on another broker version (default 4.3)
+QUEUE_TYPE=quorum make reset up      # quorum queues instead of classic (needs a fresh broker)
+```
 
 ## Precision notes (where common explanations of Celery need correcting)
 
@@ -255,6 +259,7 @@ folklore gets them wrong:
 │   ├── tasks/police.py       # the Task Police
 │   └── chaos/                # spot_killer.py, prefetch_demo.py (host-side, stdlib only)
 ├── scripts/                  # run_test_pipeline.sh, test_spot_failure.sh
+├── docs/rabbitmq4-deprecations.md   # the RabbitMQ 4 / Celery compatibility investigation
 ├── tests/                    # `make test`
 └── COMPARISON.md             # Celery vs Redis vs Kafka vs Temporal
 ```
