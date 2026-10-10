@@ -34,7 +34,7 @@ make help         # every command
 | http://localhost:5555 | Flower: live tasks and workers |
 | http://localhost:15672 | RabbitMQ UI (`pipeline` / `pipeline`): watch *Ready* vs *Unacked* per queue |
 | `jdbc:postgresql://localhost:5432/pipeline?user=pipeline&password=pipeline` | PostgreSQL (override the host port with `POSTGRES_PORT=...`) |
-| `localhost:6379` | Redis (override the host port with `REDIS_PORT=...`; no password configured) |
+| `localhost:6380` | Redis (host port 6380, not 6379: a native Redis often owns 6379 and silently shadows the container; override with `REDIS_PORT=...`; no password configured) |
 
 ## Python development checks
 

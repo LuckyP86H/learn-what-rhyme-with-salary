@@ -47,7 +47,7 @@ services:
   redis:
     image: redis:8-alpine
     ports:
-      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379" # 6380, not 6379: a native redis-server often owns 6379 and silently shadows the container
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
