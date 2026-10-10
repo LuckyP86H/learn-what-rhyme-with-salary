@@ -270,8 +270,12 @@ class RunStore:
         w.last_seen_local = max(w.last_seen_local, local)
         w.freq = e.get("freq", w.freq)
         w.software = f"{e['sw_ident']} {e['sw_ver']}" if e.get("sw_ver") else w.software
-        w.active, w.processed = e.get("active", w.active), e.get("processed", w.processed)
+        if "active" in e:
+            # Workers interleave full heartbeats (with active/processed counters) and short ones without.
+            # The counter is only meaningful as of the time it was reported, NOT as of the latest heartbeat.
+            w.active, w.processed, w.active_seen_local = e["active"], e.get("processed", w.processed), local
         if etype == "worker-offline":
             w.status = "offline"
+            w.offline_since_local = w.offline_since_local or local
         elif etype in ("worker-online", "worker-heartbeat"):
-            w.status = "online"
+            w.status, w.offline_since_local = "online", None

@@ -53,7 +53,9 @@ class Worker:
     hostname: str
     status: str = "online"  # "online" | "offline" (graceful); a SIGKILLed worker stays "online" and just goes silent
     freq: float | None = None
-    last_seen_local: float = 0.0
+    last_seen_local: float = 0.0  # any worker event: proves the worker is alive
+    offline_since_local: float | None = None  # set by worker-offline; cleared if it comes back
+    active_seen_local: float = 0.0  # when `active` was last REPORTED (short heartbeats omit it)
     software: str | None = None
     active: int | None = None
     processed: int | None = None
