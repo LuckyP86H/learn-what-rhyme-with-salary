@@ -1,0 +1,215 @@
+{
+  "_comment": "The single source of truth for what every task state means. The UI renders this file; no state is special-cased in code. To describe a new state, add an entry here. Unknown states fall back to UNKNOWN.",
+  "docs": {
+    "task_states": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#task-states",
+    "events": "https://docs.celeryq.dev/en/stable/userguide/monitoring.html#event-reference",
+    "config": "https://docs.celeryq.dev/en/stable/userguide/configuration.html"
+  },
+  "stations": [
+    {"key": "queue", "label": "Broker queue", "hint": "The message is stored by the broker, waiting for a consumer."},
+    {"key": "reserved", "label": "Reserved by a worker", "hint": "A worker has taken the message but is not running it yet."},
+    {"key": "running", "label": "Running", "hint": "A pool process is executing the task."},
+    {"key": "outcome", "label": "Outcome", "hint": "How this attempt ended."},
+    {"key": "limbo", "label": "Lost", "hint": "No worker is known to be holding this task any more."}
+  ],
+  "phases": {
+    "active": "Still moving through the pipeline.",
+    "done_ok": "Finished without a problem.",
+    "done_bad": "Finished unsuccessfully.",
+    "attention": "Needs a human: Celery itself will not report what is wrong."
+  },
+  "states": [
+    {
+      "key": "QUEUED",
+      "label": "Queued",
+      "kind": "celery",
+      "celery": {"state": "PENDING", "event": "task-sent"},
+      "station": "queue",
+      "phase": "active",
+      "tone": "queue",
+      "summary": "Published to the broker; waiting for a worker with a free slot.",
+      "detail": "Celery reports this as PENDING, but PENDING also means \"I have never heard of this task id\", so 'queued' here is inferred from the task-sent event, which only exists if the publisher sets task_send_sent_event. With worker_prefetch_multiplier=1 a message waits here until a worker slot is free; with a higher multiplier it may instead sit 'reserved' inside a busy worker while others idle.",
+      "settings": [
+        {"name": "task_send_sent_event", "why": "Without it the publisher emits no task-sent event and this state is never seen.", "url": "https://docs.celeryq.dev/en/stable/userguide/configuration.html#std-setting-task_send_sent_event"},
+        {"name": "worker_prefetch_multiplier", "why": "Decides how many messages a worker reserves in advance.", "url": "https://docs.celeryq.dev/en/stable/userguide/configuration.html#std-setting-worker_prefetch_multiplier"}
+      ]
+    },
+    {
+      "key": "RECEIVED",
+      "label": "Reserved",
+      "kind": "celery",
+      "celery": {"state": "RECEIVED", "event": "task-received"},
+      "station": "reserved",
+      "phase": "active",
+      "tone": "reserved",
+      "summary": "A worker has taken the message but has not started executing it.",
+      "detail": "The broker still counts the message as unacknowledged. With acks_late=False it is acknowledged just before execution begins; with acks_late=True only after the task finishes.",
+      "settings": [
+        {"name": "task_acks_late", "why": "When the message is acknowledged: before running (default) or after it finishes.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.acks_late"},
+        {"name": "worker_prefetch_multiplier", "why": "Messages sit in this state when a worker reserves more than it can run.", "url": "https://docs.celeryq.dev/en/stable/userguide/configuration.html#std-setting-worker_prefetch_multiplier"}
+      ]
+    },
+    {
+      "key": "WAITING_ETA",
+      "label": "Waiting for ETA",
+      "kind": "derived",
+      "celery": {"state": "RECEIVED", "event": "task-received (with eta)"},
+      "station": "reserved",
+      "phase": "active",
+      "tone": "scheduled",
+      "summary": "Received, but not allowed to run until its ETA/countdown.",
+      "detail": "Derived by this monitor: Celery has no SCHEDULED state. This is how retry(countdown=...) and exponential backoff wait: the worker holds the task in memory until the time arrives. On quorum queues, Celery's native delayed delivery holds it in the broker instead.",
+      "settings": [
+        {"name": "retry_backoff", "why": "Produces the growing delays you see here.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.retry_backoff"}
+      ]
+    },
+    {
+      "key": "STARTED",
+      "label": "Running",
+      "kind": "celery",
+      "celery": {"state": "STARTED", "event": "task-started"},
+      "station": "running",
+      "phase": "active",
+      "tone": "work",
+      "summary": "A pool process is executing the task right now.",
+      "detail": "The task-started event is sent when execution begins. The result-backend STARTED state additionally needs task_track_started. If the worker dies while a task is here: with acks_late=False the message was already acknowledged, so the task is lost; with acks_late=True the broker requeues it.",
+      "settings": [
+        {"name": "task_track_started", "why": "Makes the result backend report STARTED instead of PENDING.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.track_started"},
+        {"name": "task_acks_late", "why": "Decides whether a worker death here loses the task.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.acks_late"}
+      ]
+    },
+    {
+      "key": "SUCCESS",
+      "label": "Succeeded",
+      "kind": "celery",
+      "celery": {"state": "SUCCESS", "event": "task-succeeded"},
+      "station": "outcome",
+      "phase": "done_ok",
+      "tone": "ok",
+      "summary": "The task returned normally.",
+      "detail": "The result is stored in the result backend (if one is configured) and, with acks_late=True, the message is acknowledged now.",
+      "settings": []
+    },
+    {
+      "key": "FAILURE",
+      "label": "Failed",
+      "kind": "celery",
+      "celery": {"state": "FAILURE", "event": "task-failed"},
+      "station": "outcome",
+      "phase": "done_bad",
+      "tone": "bad",
+      "summary": "The task raised an exception that was not retried.",
+      "detail": "Celery stores the exception. By default the message is still acknowledged on failure (task_acks_on_failure_or_timeout=True), so a failed task is not redelivered. In a chord, a failed header task means the callback never runs.",
+      "settings": [
+        {"name": "task_acks_on_failure_or_timeout", "why": "True by default: failures are not redelivered.", "url": "https://docs.celeryq.dev/en/stable/userguide/configuration.html#std-setting-task_acks_on_failure_or_timeout"}
+      ]
+    },
+    {
+      "key": "RETRY",
+      "label": "Retrying",
+      "kind": "celery",
+      "celery": {"state": "RETRY", "event": "task-retried"},
+      "station": "outcome",
+      "phase": "active",
+      "tone": "warn",
+      "summary": "This attempt ended with a retry; a new message is on its way.",
+      "detail": "Celery publishes a NEW message for the same task id with retries+1 and an ETA of now + countdown. Note: RETRY is not a terminal state in Celery (it is in UNREADY_STATES). The ball goes back to the queue.",
+      "settings": [
+        {"name": "autoretry_for", "why": "Retries chosen exceptions automatically.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.autoretry_for"},
+        {"name": "retry_backoff", "why": "Exponential delay between attempts.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.retry_backoff"}
+      ]
+    },
+    {
+      "key": "REJECTED",
+      "label": "Rejected",
+      "kind": "celery",
+      "celery": {"state": "REJECTED", "event": "task-rejected"},
+      "station": "outcome",
+      "phase": "done_bad",
+      "tone": "bad",
+      "summary": "The worker refused the message (requeue=False): dropped, or dead-lettered.",
+      "detail": "Raised with Reject(requeue=False). If the queue has a dead-letter exchange the broker parks the message in a dead-letter queue; otherwise it is discarded. A rejected task stores no result, so a chord waiting on it is never told. With requeue=True the message goes back to the queue instead (shown as Queued).",
+      "settings": [
+        {"name": "task_reject_on_worker_lost", "why": "Requeues (rejects with requeue) when the pool process dies mid-task.", "url": "https://docs.celeryq.dev/en/stable/userguide/configuration.html#std-setting-task_reject_on_worker_lost"}
+      ]
+    },
+    {
+      "key": "REVOKED",
+      "label": "Revoked",
+      "kind": "celery",
+      "celery": {"state": "REVOKED", "event": "task-revoked"},
+      "station": "outcome",
+      "phase": "done_bad",
+      "tone": "bad",
+      "summary": "Cancelled (control.revoke) or expired before it could run.",
+      "detail": "Sent by revoke, or when a task's expires time passed. If terminated=True the running process was killed with a signal.",
+      "settings": []
+    },
+    {
+      "key": "REPLACED",
+      "label": "Replaced",
+      "kind": "derived",
+      "celery": {"state": null, "event": "(none: inferred)"},
+      "station": "outcome",
+      "phase": "done_ok",
+      "tone": "muted",
+      "summary": "The task called self.replace(); its id lives on as a different task.",
+      "detail": "Derived by this monitor. Celery emits no terminal event for the original, so it would look stuck in Running forever. We infer REPLACED when the same task id is published again under a different task name. The new task keeps the old id, which is why a task id is not a unique identity.",
+      "settings": []
+    },
+    {
+      "key": "ENDED_SILENTLY",
+      "label": "Ended silently",
+      "kind": "derived",
+      "celery": {"state": null, "event": "(none: inferred from worker-heartbeat 'active')"},
+      "station": "outcome",
+      "phase": "done_ok",
+      "tone": "muted",
+      "summary": "No terminal event arrived, but the worker says it is no longer executing this task.",
+      "detail": "Derived by this monitor by comparing a worker's heartbeat 'active' count with the tasks we believe are running on it. The usual cause is a task that called self.replace() (or raised Ignore): its work continues in other tasks, which is why a chord whose callback can never run leaves its parent here. A lost event looks the same.",
+      "settings": []
+    },
+    {
+      "key": "WORKER_LOST",
+      "label": "Worker lost",
+      "kind": "derived",
+      "celery": {"state": null, "event": "(none: absence of worker-heartbeat)"},
+      "station": "limbo",
+      "phase": "attention",
+      "tone": "bad",
+      "summary": "The worker running this task stopped sending heartbeats.",
+      "detail": "Derived by this monitor. A SIGKILL, OOM-kill or lost host emits no event at all, not even worker-offline. What happens next is decided by acks_late: if True and the broker connection dropped, RabbitMQ requeues the message and another worker restarts the task; if False the task is silently lost.",
+      "settings": [
+        {"name": "task_acks_late", "why": "Without it a dead worker's task is lost.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.acks_late"},
+        {"name": "task_reject_on_worker_lost", "why": "Covers a pool process dying while its parent worker survives.", "url": "https://docs.celeryq.dev/en/stable/userguide/configuration.html#std-setting-task_reject_on_worker_lost"}
+      ]
+    },
+    {
+      "key": "SUSPECTED_HUNG",
+      "label": "Suspected hung",
+      "kind": "derived",
+      "celery": {"state": "STARTED", "event": "task-started (and nothing since)"},
+      "station": "running",
+      "phase": "attention",
+      "tone": "warn",
+      "summary": "Running much longer than expected; Celery cannot tell a hang from a slow job.",
+      "detail": "Derived by this monitor and only a guess: Celery has no per-task heartbeat. A soft time limit raises an exception inside the task so it can clean up; the hard limit kills the process.",
+      "settings": [
+        {"name": "task_soft_time_limit", "why": "Raises SoftTimeLimitExceeded inside the task.", "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.soft_time_limit"},
+        {"name": "task_time_limit", "why": "Hard limit: kills the pool process.", "url": "https://docs.celeryq.dev/en/stable/userguide/configuration.html#std-setting-task_time_limit"}
+      ]
+    },
+    {
+      "key": "UNKNOWN",
+      "label": "Unknown state",
+      "kind": "fallback",
+      "celery": {"state": null, "event": null},
+      "station": "outcome",
+      "phase": "attention",
+      "tone": "muted",
+      "summary": "A state this monitor has no description for.",
+      "detail": "Could be a custom state set with update_state(), or something added by a newer Celery. It is shown generically rather than hidden.",
+      "settings": []
+    }
+  ]
+}
