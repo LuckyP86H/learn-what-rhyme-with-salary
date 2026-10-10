@@ -293,3 +293,13 @@ def test_ignored_task_names_vanish_including_their_later_nameless_events():
         store.apply({"type": etype, "uuid": "n", "hostname": "w@1", "retries": 0, "timestamp": 1.0, "local_received": 1.0, **extra})
     store.apply({"type": "task-sent", "uuid": "real", "name": "t.real", "root_id": "real", "retries": 0, "timestamp": 2.0, "local_received": 2.0})
     assert set(store.tasks) == {"real:0"}, "started/succeeded carry no name, so the remembered id must be what filters them"
+
+
+def test_a_reserved_task_on_a_shutting_down_worker_goes_back_to_the_queue_not_draining():
+    # Found live: only RUNNING tasks drain in a warm shutdown; reserved ones are requeued by the broker.
+    store = RunStore()
+    for etype, extra in (("task-sent", {"name": "t.x", "root_id": "u", "retries": 0}), ("task-received", {"name": "t.x", "root_id": "u", "retries": 0})):
+        store.apply({"type": etype, "uuid": "u", "hostname": "w@1", "timestamp": 10.0, "local_received": 10.0, **extra})
+    store.apply({"type": "worker-offline", "hostname": "w@1", "freq": 2, "timestamp": 12.0, "local_received": 12.0})
+    state, note = effective_state(store.tasks["u:0"], store, 14.0)
+    assert state == "QUEUED" and "go back on the queue" in note

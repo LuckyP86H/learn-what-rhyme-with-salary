@@ -59,7 +59,11 @@ def effective_state(task: Task, store: RunStore, now: float, silent: set[str] | 
     if state == "STARTED" and task.key in (silent_ended_keys(store) if silent is None else silent):
         return "ENDED_SILENTLY", f"{task.worker} reports it is no longer executing this, but no terminal event arrived"
     worker = store.workers.get(task.worker or "")
-    if state in ("RECEIVED", "STARTED") and worker is not None and worker.status == "offline":
+    if state == "RECEIVED" and worker is not None and worker.status == "offline":
+        # A warm shutdown only finishes tasks that are RUNNING. A merely reserved task is never started and its
+        # unacknowledged message goes back to the queue, so showing it as "draining" would be wrong.
+        return "QUEUED", f"{task.worker} announced shutdown before starting this; unacknowledged messages go back on the queue"
+    if state == "STARTED" and worker is not None and worker.status == "offline":
         if worker_is_draining(worker, now, store):
             return "DRAINING", f"{task.worker} announced shutdown; a warm shutdown lets in-flight tasks finish"
         return "WORKER_LOST", f"{task.worker} went offline and this task never finished"
