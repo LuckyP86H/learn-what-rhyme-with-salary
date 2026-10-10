@@ -36,6 +36,13 @@ make help         # every command
 | `jdbc:postgresql://localhost:5432/pipeline?user=pipeline&password=pipeline` | PostgreSQL (override the host port with `POSTGRES_PORT=...`) |
 | `localhost:6380` | Redis (host port 6380, not 6379: a native Redis often owns 6379 and silently shadows the container; override with `REDIS_PORT=...`; no password configured) |
 
+## Workflow visualizer (in progress)
+
+`celery_viz/` is a read-only monitor that explains what a Celery workflow is doing in Celery's own terms
+(queued, reserved, running, retrying, draining, worker lost, ...). The API runs as the `viz` service on
+http://localhost:8200 (`curl localhost:8200/api/runs`); the React UI is the next phase. See
+[celery_viz/README.md](celery_viz/README.md). `make viz-check` validates it against the database.
+
 ## Python development checks
 
 Ruff enforces sorted imports (`I001`). For VS Code auto-fix on save, install the Ruff extension and
