@@ -1,8 +1,9 @@
 COMPOSE ?= docker compose
 API_PORT ?= 8100
+POSTGRES_PORT ?= 5432
 API ?= http://localhost:$(API_PORT)
 CHUNKS ?= 5
-export API_PORT API
+export API_PORT POSTGRES_PORT API
 
 .DEFAULT_GOAL := help
 .PHONY: help up down reset logs ps wait trigger trigger-retry trigger-bad trigger-poison trigger-bug status events dlq config \
@@ -18,6 +19,7 @@ up: ## build + start the whole stack in hardened mode
 	@echo "  API       $(API)/docs"
 	@echo "  Flower    http://localhost:5555"
 	@echo "  RabbitMQ  http://localhost:15672   (pipeline / pipeline)"
+	@echo "  PostgreSQL jdbc:postgresql://localhost:$(POSTGRES_PORT)/pipeline?user=pipeline&password=pipeline"
 	@echo ""
 	@echo "Next: make trigger"
 
