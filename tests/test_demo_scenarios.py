@@ -64,16 +64,24 @@ def test_group_is_launched_through_one_parent_task_so_it_has_a_single_root(monke
     assert out == {"root_id": "root-1"} and sent["args"][1] == "permanent"
 
 
-def test_the_parent_replaces_itself_with_one_translation_per_language_and_faults_only_the_first(monkeypatch):
+def test_the_parent_publishes_a_plain_group_and_does_not_replace_itself(monkeypatch):
+    # replace(group) would make Celery add an implicit chord (celery.accumulate): the scenario must stay a group.
     captured = {}
 
-    def fake_replace(self, sig):
-        captured["tasks"] = list(sig.tasks)
-        return RuntimeError("replaced")  # raise self.replace(...) raises whatever replace returns
+    class FakeGroup:
+        def __init__(self, sigs):
+            captured["sigs"] = list(sigs)
 
-    monkeypatch.setattr(Task, "replace", fake_replace)
-    with pytest.raises(RuntimeError, match="replaced"):
-        meeting.translate_all.run("m1", "permanent")
-    tasks = captured["tasks"]
-    assert [s.args[1] for s in tasks] == ["es", "de", "ja"]
-    assert [s.args[2] for s in tasks] == ["permanent", None, None]
+        def apply_async(self):
+            captured["published"] = True
+
+    def forbidden_replace(self, sig):
+        raise AssertionError("translate_all must not call replace()")
+
+    monkeypatch.setattr(meeting, "group", FakeGroup)
+    monkeypatch.setattr(Task, "replace", forbidden_replace)
+    meeting.translate_all.run("m1", "permanent")
+    sigs = captured["sigs"]
+    assert captured["published"] is True
+    assert [s.args[1] for s in sigs] == ["es", "de", "ja"]
+    assert [s.args[2] for s in sigs] == ["permanent", None, None]

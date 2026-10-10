@@ -70,10 +70,14 @@ LANGUAGES = ("es", "de", "ja")
 
 @celery_app.task(bind=True, name="tasks.meeting_translate_all")
 def translate_all(self: Task, meeting_id: str, fault: str | None = None) -> None:
-    """Fan out one translation per language and replace ourselves with the group.
+    """Publish one translation per language as a plain group: independent tasks, no join.
 
     Why a parent task at all: a group submitted straight from a client gives every task its OWN root id
     (Celery reports no shared group id in events), so a monitor could not tell they belong together.
-    Fanning out from a parent keeps one root, which is also how the call pipeline's ingest_call works.
+    Tasks published from inside a task inherit its root and parent, so they stay one run.
+
+    Why not `raise self.replace(group(...))`: replacing a task with a group makes Celery add an implicit
+    chord (a built-in `celery.accumulate` join) so the replaced task has a single result. That would turn
+    this scenario into a chord; here we want to show a real group.
     """
-    raise self.replace(group(translate.s(meeting_id, lang, fault if i == 0 else None) for i, lang in enumerate(LANGUAGES)))
+    group(translate.s(meeting_id, lang, fault if i == 0 else None) for i, lang in enumerate(LANGUAGES)).apply_async()
