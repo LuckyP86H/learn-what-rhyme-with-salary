@@ -15,7 +15,7 @@ and was not independently verified. Anything I could not establish is labelled a
 | RabbitMQ feature | Plain meaning | What in Celery uses it |
 |---|---|---|
 | `transient_nonexcl_queues` | A queue that is **non-durable *and* non-exclusive**: it vanishes on broker restart, yet any connection may use it | Celery's **control/pidbox** queues (`<node>.celery.pidbox`, the "mingle" step at worker start, `celery inspect/control`) and **event** queues (`celeryev.*`: Flower, monitors) |
-| `global_qos` | `basic.qos(global=true)`: one prefetch limit shared across a whole channel instead of per consumer | How Celery implements `worker_prefetch_multiplier` on RabbitMQ (`celery/worker/consumer/tasks.py`) |
+| `global_qos` | `basic.qos(global=true)`: one prefetch limit shared across a whole channel instead of per consumer | How Celery implements `worker_prefetch_multiplier` on RabbitMQ (`celery.worker.consumer.tasks` in Celery's source) |
 
 Neither is exotic. They are Celery defaults, so any Celery-on-RabbitMQ deployment uses both.
 

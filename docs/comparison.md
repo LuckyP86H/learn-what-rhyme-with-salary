@@ -29,8 +29,8 @@ dead-lettering, and unambiguous redelivery semantics. For a stateless "do this o
 
 | Footgun | What actually happens | Where it is handled |
 |---|---|---|
-| `acks_late=False` (default) | Message ACKed when the task *starts*. Kill the worker → the task is gone, the chord never completes. | `config.py`, experiment 1 |
-| `reject_on_worker_lost=False` (default) | A pool *child* dies (OOM) but the parent keeps its connection, so RabbitMQ sees nothing. Celery logs `WorkerLostError` and ACKs. Lost. | `config.py`, experiment 2 |
+| `acks_late=False` (default) | Message ACKed when the task *starts*. Kill the worker → the task is gone, the chord never completes. | `config.py`; [tutorial step 7](tutorial.md#7-a-worker-dies) |
+| `reject_on_worker_lost=False` (default) | A pool *child* dies (OOM) but the parent keeps its connection, so RabbitMQ sees nothing. Celery logs `WorkerLostError` and ACKs. Lost. | `config.py`; [results: `child` eviction](results.md#eviction-of-a-worker-mid-chunk) |
 | `acks_late=True` ⇒ at-least-once | Every task may now run twice, even concurrently. | Lease + fencing token in `repository.claim_chunk` |
 | Poison pill + `reject_on_worker_lost` | A task that always crashes its child is requeued forever. | `attempts` counter in PostgreSQL; broker-side `x-delivery-limit` exists only on quorum queues |
 | `request.retries` is blind | It counts `self.retry()` calls, not crashes or redeliveries. | Retry budget lives in the DB, not in Celery |
@@ -43,8 +43,8 @@ dead-lettering, and unambiguous redelivery semantics. For a stateless "do this o
 | RabbitMQ `consumer_timeout` (30 min default) | With late acks, a task running longer than this has its channel closed by the broker. Relevant for long ETL backfills. | Not triggered here (chunks last seconds) |
 | Redis as the *broker* + `visibility_timeout` (1 h default) | Unacked messages are redelivered after an hour, so a long late-ack task gets duplicated. | We use RabbitMQ; Redis is only the result backend |
 | ETA / countdown tasks sit in worker memory | A retry with `countdown=60` is held by a worker (and counts against its prefetch) until due. | Keep countdowns short; see `backoff_seconds` |
-| RabbitMQ 4.x deprecations | Celery's control/event queues (`transient_nonexcl_queues`) are **refused by RabbitMQ 4.3**: stock-config workers stop consuming while the process stays Up. Its prefetch mechanism (`global_qos`) is also on the deprecation path. | Two settings in `config.py`; full analysis in `docs/rabbitmq4-deprecations.md` |
-| Prefetch (default 4 × concurrency) | With RabbitMQ the reserved messages are *not lost* on a crash (they are unacked, so requeued); the damage is **unfair dispatch**: a busy worker hoards messages while a neighbour idles. | Experiment 3 |
+| RabbitMQ 4.x deprecations | Celery's control/event queues (`transient_nonexcl_queues`) are **refused by RabbitMQ 4.3**: stock-config workers stop consuming while the process stays Up. Its prefetch mechanism (`global_qos`) is also on the deprecation path. | Two settings in `config.py`; full analysis in [RabbitMQ 4 and Celery](rabbitmq4-deprecations.md) |
+| Prefetch (default 4 × concurrency) | With RabbitMQ the reserved messages are *not lost* on a crash (they are unacked, so requeued); the damage is **unfair dispatch**: a busy worker hoards messages while a neighbour idles. | [tutorial step 9](tutorial.md#9-fair-dispatch) |
 
 **Use it when** tasks are short or idempotent, the Python ecosystem matters, and you can accept
 "at-least-once, tune it yourself". **Be careful when** tasks are long, run on preemptible hardware, and
@@ -216,6 +216,6 @@ class CallPipeline:
 * **High-volume event streams, replay, many consumers** → Kafka; pair it with a task or workflow system for the multi-step work.
 * **Multi-step, long-running, must-not-lose, stateful business processes** → Temporal.
 
-The most useful number from this project: count the lines in `repository.py` and `tasks/police.py` that
+The most useful number from this project: count the lines in `app/repository.py` and `app/tasks/police.py` that
 exist only to compensate for a message being a weak promise. That is the Celery tax for this workload,
 and what Temporal's pitch is to make unnecessary.
