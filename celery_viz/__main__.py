@@ -6,12 +6,15 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from pathlib import Path
 
 import uvicorn
 
+from celery_viz.catalog import load_catalog
 from celery_viz.collector import EventCollector, ReplayDriver
 from celery_viz.config import VizConfig
 from celery_viz.redaction import RedactionPolicy
+from celery_viz.remote_config import RemoteConfig
 from celery_viz.replay import load_events
 from celery_viz.server import create_app
 from celery_viz.store import RunStore
@@ -21,15 +24,19 @@ def build(args: argparse.Namespace):
     config = VizConfig(hung_after_seconds=args.hung_after, max_runs=args.max_runs,
                        min_lost_after_seconds=args.lost_after, drain_grace_seconds=args.drain_grace)
     policy = RedactionPolicy(keep_args=args.keep_args, keep_result=args.keep_result)
+    ui_dir = Path(args.ui_dir) if args.ui_dir else Path(__file__).with_name("ui_dist")
+    catalog = load_catalog(args.catalog) if args.catalog else None
     if args.replay:
         store = RunStore(config, live=False)
         source = ReplayDriver(list(load_events(args.replay)), store, policy, speed=args.speed)
-        return create_app(store, source, mode="replay"), source
+        return create_app(store, source, mode="replay", ui_dir=ui_dir), source
     store = RunStore(config, live=True)
     if not args.broker:
         raise SystemExit("--broker (or the BROKER_URL environment variable) is required unless --replay is given")
     source = EventCollector(args.broker, store, policy)
-    return create_app(store, source, mode="live"), source
+    app = create_app(store, source, mode="live", catalog=catalog, queue_metrics_url=args.queue_metrics_url,
+                     remote_config=RemoteConfig(source.app), ui_dir=ui_dir)
+    return app, source
 
 
 def main() -> None:
@@ -42,6 +49,9 @@ def main() -> None:
     ap.add_argument("--hung-after", type=float, default=None, help="flag tasks running longer than this many seconds as suspected hung")
     ap.add_argument("--lost-after", type=float, default=12.0, help="never call a worker lost before this many seconds of silence (it is also at least 3x the worker's own heartbeat period)")
     ap.add_argument("--drain-grace", type=float, default=35.0, help="how long a worker that announced shutdown may keep running tasks before they count as lost (match your orchestrator's stop grace period)")
+    ap.add_argument("--queue-metrics-url", help="RabbitMQ Prometheus endpoint for measured ready/unacked, e.g. http://rabbitmq:15692/metrics/detailed?family=queue_coarse_metrics")
+    ap.add_argument("--catalog", help="enable launching: 'package.module:object' providing describe()/launch(). Off by default (read-only)")
+    ap.add_argument("--ui-dir", help="directory with the built UI (default: celery_viz/ui_dist when present)")
     ap.add_argument("--max-runs", type=int, default=500)
     ap.add_argument("--keep-args", action="store_true", help="keep task args/kwargs (default: dropped; may contain personal data)")
     ap.add_argument("--keep-result", action="store_true", help="keep task results (default: dropped)")
