@@ -9,7 +9,7 @@ With multiplier 4 each worker *reserves* 4 messages up front. A worker stuck on 
 the ones queued behind it hostage while its neighbour finishes everything else and goes idle.
 With multiplier 1 a worker only holds what it is running, so work flows to whoever is free.
 
-Standard library only; run from call-pipeline/ (normally via `make test-prefetch`).
+Standard library only; run from the repo root (normally via `make test-prefetch`).
 """
 from __future__ import annotations
 
@@ -48,25 +48,22 @@ def main() -> None:
     cfg = get(f"{args.api}/config")
     faults = {int(i): "slow" for i in args.slow.split(",") if i}
     call_id = post(f"{args.api}/calls", {"title": "prefetch demo", "num_chunks": args.chunks, "faults": faults})["call_id"]
+    # RabbitMQ 4.x no longer reports Celery's (global-QoS) prefetch, so show the configured reservation and
+    # let the *unacked* column below prove it: each worker reserves multiplier x concurrency messages.
     print(f"worker_prefetch_multiplier={cfg['worker_prefetch_multiplier']}  acks_late={cfg['task_acks_late']}; "
-          f"{args.chunks} chunks, slow={sorted(faults)}; 2 workers x 1 process")
-    print(f"{'t':>4}  {'ready':>5} {'unacked':>7}  {'running':>7} {'done':>4}   per-worker prefetch (global QoS)")
+          f"{args.chunks} chunks, slow={sorted(faults)}; 2 workers x 1 process "
+          f"=> each worker reserves {cfg['worker_prefetch_multiplier']} message(s)")
+    print(f"{'t':>4}  {'ready':>5} {'unacked':>7}  {'running':>7} {'done':>4}")
     start = time.monotonic()
     state: dict = {}
     while time.monotonic() - start < 240:
         state = get(f"{args.api}/calls/{call_id}")  # type: ignore[assignment]
         q = get(vhost_q, auth)
-        # Celery sets prefetch with a *global* basic.qos, so RabbitMQ reports it on the worker's channel
-        # (global_prefetch_count), not on the consumer (whose prefetch_count stays 0).
-        channels = {c["channel_details"]["name"] for c in get(f"{args.rabbitmq}/api/consumers/%2F", auth)
-                    if c["queue"]["name"] == "heavy_processing"}
-        consumers = sorted(c["global_prefetch_count"] for c in get(f"{args.rabbitmq}/api/channels", auth)
-                           if c["name"] in channels)
         chunks = state["chunks"]
         running = sum(c["status"] == "PROCESSING" for c in chunks)
         done = sum(c["status"] == "COMPLETED" for c in chunks)
         print(f"{time.monotonic() - start:4.0f}  {q.get('messages_ready', 0):5d} {q.get('messages_unacknowledged', 0):7d}  "
-              f"{running:7d} {done:4d}   {consumers}")
+              f"{running:7d} {done:4d}")
         if state["status"] in ("COMPLETED", "FAILED"):
             break
         time.sleep(2)

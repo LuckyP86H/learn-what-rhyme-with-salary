@@ -1,6 +1,12 @@
 import pytest
 
-from config import RELIABILITY_PROFILES, TASK_QUEUES, TASK_ROUTES, Settings, build_celery_config
+from config import (
+    RELIABILITY_PROFILES,
+    TASK_QUEUES,
+    TASK_ROUTES,
+    Settings,
+    build_celery_config,
+)
 
 
 def conf(monkeypatch, **env):

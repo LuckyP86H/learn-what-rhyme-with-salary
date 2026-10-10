@@ -31,7 +31,7 @@ x-app: &app
 services:
   # ---- infrastructure -------------------------------------------------------------------------------
   rabbitmq:
-    image: rabbitmq:3.13-management
+    image: rabbitmq:4.2-management
     environment:
       RABBITMQ_DEFAULT_USER: pipeline
       RABBITMQ_DEFAULT_PASS: pipeline
@@ -44,7 +44,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -52,13 +52,13 @@ services:
       retries: 20
 
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: pipeline
       POSTGRES_PASSWORD: pipeline
       POSTGRES_DB: pipeline
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql  # PG 18+ keeps versioned data dirs under here
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pipeline -d pipeline"]
       interval: 5s

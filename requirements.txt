@@ -1,0 +1,11 @@
+# Direct dependencies, pinned for reproducible builds (resolved on Python 3.14.5, 2026-10).
+# Celery's own deps (kombu, amqp, billiard, redis client) are pinned transitively by celery==5.6.3.
+celery[redis]==5.6.3
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.4
+psycopg[binary]==3.3.6
+httpx==0.28.1
+# tests and import linting
+pytest==9.1.1
+ruff==0.17.0

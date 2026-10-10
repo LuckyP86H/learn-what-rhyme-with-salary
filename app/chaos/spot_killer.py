@@ -4,7 +4,7 @@
 Starts a call, waits until about half the chunks are done and one is mid-flight, then "evicts" the
 worker running it, boots a replacement, and reports what happened to the in-flight chunk.
 
-Runs on your HOST (standard library only, shells out to `docker`). From call-pipeline/:
+Runs on your HOST (standard library only, shells out to `docker`). From the repo root:
 
     python3 app/chaos/spot_killer.py                    # SIGKILL: the instance vanishes
     python3 app/chaos/spot_killer.py --mode term-kill   # SIGTERM, then SIGKILL after a short grace period
