@@ -5,7 +5,7 @@ import { Launch } from "./components/Launch";
 import { Legend } from "./components/Legend";
 import { QueuePanel, RunList, WorkerPanel } from "./components/Panels";
 import { useNow, usePoll, useStream } from "./hooks";
-import { analyzeRun } from "./shape";
+import { analyzeRun, limitRows } from "./shape";
 import type { CatalogResponse, ConfigResponse, QueuesResponse } from "./types";
 
 export default function App() {
@@ -19,6 +19,7 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [legendKey, setLegendKey] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [showAllRows, setShowAllRows] = useState(false);
   const followSince = useRef<number | null>(null);  // after a launch, jump to the first run that appears
 
   const summaries = useMemo(() => Object.values(stream.summaries).sort((a, b) => b.updated_at - a.updated_at), [stream.summaries]);
@@ -38,6 +39,7 @@ export default function App() {
 
   const run = selectedRun ? (stream.runs[selectedRun] ?? null) : null;
   const analysis = useMemo(() => (run ? analyzeRun(run) : null), [run]);
+  const rows = useMemo(() => (analysis ? limitRows(analysis.rows, 100, showAllRows) : null), [analysis, showAllRows]);
   const task = run?.tasks.find((t) => t.key === selectedTask) ?? null;
 
   return (
@@ -55,7 +57,7 @@ export default function App() {
         <section>
           <h2>Runs</h2>
           <input className="search" placeholder="filter by name…" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="filter runs" />
-          <RunList runs={summaries} selectedId={selectedRun} now={now} filter={filter} onSelect={(id) => { setSelectedRun(id); setSelectedTask(null); }} />
+          <RunList runs={summaries} selectedId={selectedRun} now={now} filter={filter} onSelect={(id) => { setSelectedRun(id); setSelectedTask(null); setShowAllRows(false); }} />
         </section>
         <section><h2>Workers</h2><WorkerPanel workers={stream.workers} /></section>
       </aside>
@@ -71,7 +73,7 @@ export default function App() {
               </div>
               <div className="muted peak">peak at once: <strong>{analysis.peakConcurrency}</strong></div>
             </div>
-            {stream.table && <Canvas analysis={analysis} table={stream.table} now={now} selectedKey={selectedTask} onSelect={(k) => { setSelectedTask(k); setLegendKey(null); }} />}
+            {stream.table && rows && <Canvas rows={rows} table={stream.table} now={now} selectedKey={selectedTask} onShowAll={() => setShowAllRows(true)} onSelect={(k) => { setSelectedTask(k); setLegendKey(null); }} />}
           </>
         ) : (
           <p className="muted empty">{summaries.length ? "Loading run…" : "Waiting for the first run. Launch one on the left."}</p>

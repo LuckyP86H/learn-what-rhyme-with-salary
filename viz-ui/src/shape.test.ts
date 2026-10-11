@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeRun } from "./shape";
+import { analyzeRun, limitRows } from "./shape";
 import { run, spawned, task } from "./testkit";
 
 describe("analyzeRun", () => {
@@ -59,5 +59,31 @@ describe("analyzeRun", () => {
   it("never hangs on a cyclic graph", () => {
     const a = analyzeRun(run([task("a:0"), task("b:0")], [spawned("a:0", "b:0"), spawned("b:0", "a:0")]));
     expect(a.rows).toHaveLength(2);
+  });
+});
+
+describe("limitRows", () => {
+  const many = (n: number, extra: (i: number) => Partial<ReturnType<typeof task>> = () => ({})) =>
+    Array.from({ length: n }, (_, i) => ({ task: task(`t${i}:0`, extra(i)), depth: 0 }));
+
+  it("shows everything when the run is small or the user asked for all", () => {
+    expect(limitRows(many(5), 100, false).hidden).toBe(0);
+    expect(limitRows(many(500), 100, true).shown).toHaveLength(500);
+  });
+
+  it("folds the tail of a huge run into a count by state", () => {
+    const out = limitRows(many(1000), 100, false);
+    expect(out.shown).toHaveLength(100);
+    expect(out.hidden).toBe(900);
+    expect(out.hiddenByState).toEqual({ SUCCESS: 900 });
+  });
+
+  it("never hides a task that failed or needs attention, wherever it sits", () => {
+    const rows = many(1000, (i) => (i === 700 ? { state: "WORKER_LOST", phase: "attention" } : i === 900 ? { state: "REJECTED", phase: "done_bad" } : {}));
+    const out = limitRows(rows, 100, false);
+    expect(out.shown.map((r) => r.task.key)).toContain("t700:0");
+    expect(out.shown.map((r) => r.task.key)).toContain("t900:0");
+    expect(out.shown).toHaveLength(102);
+    expect(out.hidden).toBe(898);
   });
 });

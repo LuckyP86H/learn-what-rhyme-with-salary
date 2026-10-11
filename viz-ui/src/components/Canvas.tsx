@@ -1,13 +1,14 @@
 import { fmtDuration, shortHost, shortId, shortName } from "../format";
-import type { Analysis } from "../shape";
+import type { RowLimit } from "../shape";
 import type { StateInfo, StateTable, TaskView } from "../types";
 
 interface Props {
-  analysis: Analysis;
+  rows: RowLimit;
   table: StateTable;
   now: number;
   selectedKey: string | null;
   onSelect: (key: string) => void;
+  onShowAll: () => void;
 }
 
 /** Text next to the ball: how long it has been in this state, from facts we have (never invented). */
@@ -19,7 +20,7 @@ function liveLabel(task: TaskView, info: StateInfo, now: number): string {
   return info.label;
 }
 
-export function Canvas({ analysis, table, now, selectedKey, onSelect }: Props) {
+export function Canvas({ rows, table, now, selectedKey, onSelect, onShowAll }: Props) {
   const stationIndex = new Map(table.stations.map((s, i) => [s.key, i]));
   const stateStation = new Map(table.states.map((s) => [s.key, s.station]));
   const byKey = new Map(table.states.map((s) => [s.key, s]));
@@ -37,7 +38,7 @@ export function Canvas({ analysis, table, now, selectedKey, onSelect }: Props) {
           ))}
         </div>
       </div>
-      {analysis.rows.map(({ task, depth }) => {
+      {rows.shown.map(({ task, depth }) => {
         const info = byKey.get(task.state) ?? byKey.get("UNKNOWN")!;
         const at = stationIndex.get(task.station) ?? columns - 1;
         const visited = new Set(task.timeline.filter((t) => t.transition).map((t) => stateStation.get(t.state)));
@@ -46,7 +47,16 @@ export function Canvas({ analysis, table, now, selectedKey, onSelect }: Props) {
             key={task.key}
             role="listitem"
             className={`lane phase-${task.phase} ${selectedKey === task.key ? "selected" : ""}`}
+            tabIndex={0}
+            aria-current={selectedKey === task.key ? "true" : undefined}
+            aria-label={`${shortName(task.name)}: ${info.label}`}
             onClick={() => onSelect(task.key)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(task.key);
+              }
+            }}
           >
             <div className="lane-label" style={{ paddingLeft: depth * 16 }}>
               {depth > 0 && <span className="elbow" aria-hidden="true">└</span>}
@@ -74,6 +84,15 @@ export function Canvas({ analysis, table, now, selectedKey, onSelect }: Props) {
           </div>
         );
       })}
+      {rows.hidden > 0 && (
+        <div className="folded">
+          <span>
+            {rows.hidden} more task{rows.hidden === 1 ? "" : "s"} folded away (
+            {Object.entries(rows.hiddenByState).map(([state, n]) => `${n} ${byKey.get(state)?.label.toLowerCase() ?? state}`).join(", ")}). Anything that failed or needs attention is always shown.
+          </span>
+          <button onClick={onShowAll}>Show all</button>
+        </div>
+      )}
     </div>
   );
 }
