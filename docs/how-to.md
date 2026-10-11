@@ -68,6 +68,9 @@ make ui             # rebuild the UI into celery_viz/ui_dist
 make docs-check     # generated docs fresh, and no stale references in the hand-written ones
 ```
 
+`make test`, `make docs` and `make docs-check` run your working tree inside the project image, so after changing
+`requirements.txt` run `docker compose build` once to refresh the image's dependencies.
+
 After `make ui` you can see UI changes without rebuilding the image:
 
 ```bash
