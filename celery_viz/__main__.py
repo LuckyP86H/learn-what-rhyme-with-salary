@@ -51,7 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--lost-after", type=float, default=12.0, help="never call a worker lost before this many seconds of silence (it is also at least 3x the worker's own heartbeat period)")
     ap.add_argument("--drain-grace", type=float, default=35.0, help="how long a worker that announced shutdown may keep running tasks before they count as lost (match your orchestrator's stop grace period)")
     ap.add_argument("--queue-metrics-url", help="RabbitMQ Prometheus endpoint for measured ready/unacked, e.g. http://rabbitmq:15692/metrics/detailed?family=queue_coarse_metrics")
-    ap.add_argument("--catalog", help="enable launching: 'package.module:object' providing describe()/launch(). Off by default (read-only)")
+    ap.add_argument("--catalog", default=os.environ.get("CELERY_VIZ_CATALOG") or None,
+                    help="enable launching: 'package.module:object' providing describe()/launch(). Off by default (read-only). "
+                         "Default: $CELERY_VIZ_CATALOG")
     ap.add_argument("--ui-dir", help="directory with the built UI (default: celery_viz/ui_dist when present)")
     ap.add_argument("--ignore-task", action="append", default=[], metavar="NAME", help="drop this task name entirely (repeatable), e.g. a periodic sweep that would flood the run list")
     ap.add_argument("--max-runs", type=int, default=500)

@@ -142,3 +142,15 @@ def test_built_ui_is_served_without_shadowing_the_api(tmp_path):
 
 def test_queue_parser_module_does_no_network_on_import():
     assert hasattr(queues_module, "fetch_queue_stats")
+
+
+def test_launching_is_off_unless_the_environment_or_a_flag_enables_it(monkeypatch):
+    from celery_viz.__main__ import build_parser
+
+    monkeypatch.delenv("CELERY_VIZ_CATALOG", raising=False)
+    assert build_parser().parse_args([]).catalog is None
+    monkeypatch.setenv("CELERY_VIZ_CATALOG", "")  # compose passes an empty string for `VIZ_CATALOG=`
+    assert build_parser().parse_args([]).catalog is None
+    monkeypatch.setenv("CELERY_VIZ_CATALOG", "app.viz_catalog:catalog")
+    assert build_parser().parse_args([]).catalog == "app.viz_catalog:catalog"
+    assert build_parser().parse_args(["--catalog", "x:y"]).catalog == "x:y"

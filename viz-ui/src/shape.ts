@@ -91,3 +91,29 @@ function peakRunning(tasks: TaskView[]): number {
   }
   return peak;
 }
+
+export interface RowLimit {
+  shown: Row[];
+  hidden: number;
+  /** How many hidden tasks are in each state, e.g. { SUCCESS: 880 }, so the summary says what was folded away. */
+  hiddenByState: Record<string, number>;
+}
+
+/**
+ * A run can hold thousands of tasks; drawing a DOM row for each makes the page unusable. Keep the first
+ * `limit` rows (in graph order) plus EVERY row that needs a human (failed or needs attention), and fold the
+ * rest into a summary. Nothing that matters is ever hidden.
+ */
+export function limitRows(rows: Row[], limit: number, showAll: boolean): RowLimit {
+  if (showAll || rows.length <= limit) return { shown: rows, hidden: 0, hiddenByState: {} };
+  const shown: Row[] = [];
+  const hiddenByState: Record<string, number> = {};
+  rows.forEach((row, index) => {
+    if (index < limit || row.task.phase === "attention" || row.task.phase === "done_bad") {
+      shown.push(row);
+    } else {
+      hiddenByState[row.task.state] = (hiddenByState[row.task.state] ?? 0) + 1;
+    }
+  });
+  return { shown, hidden: rows.length - shown.length, hiddenByState };
+}

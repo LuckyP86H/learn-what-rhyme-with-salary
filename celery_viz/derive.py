@@ -79,15 +79,22 @@ def effective_state(task: Task, store: RunStore, now: float, silent: set[str] | 
 
 def _fan_in_edges(run_tasks: list[Task]) -> list[dict[str, str]]:
     """Chord join edges. Celery gives the callback only ONE parent (the last header task to finish),
-    so we infer the rest: finished siblings of that parent, same name, same spawner."""
+    so we infer the rest: finished siblings of that parent, same name, same spawner.
+
+    Indexed once so the cost stays linear: a run can hold thousands of parallel tasks and this runs
+    every second while the store lock is held.
+    """
+    by_key = {t.key: t for t in run_tasks}
+    siblings: dict[tuple[str | None, str | None], list[Task]] = {}
+    for t in run_tasks:
+        siblings.setdefault((t.parent_key, t.name), []).append(t)
     edges: list[dict[str, str]] = []
     for callback in run_tasks:
-        parent = next((t for t in run_tasks if t.key == callback.parent_key), None)
+        parent = by_key.get(callback.parent_key) if callback.parent_key else None
         if parent is None or parent.name == callback.name:
             continue
-        siblings = [t for t in run_tasks if t.key != parent.key and t.name == parent.name and t.parent_key == parent.parent_key]
-        for sib in siblings:
-            if sib.ended_at is not None and callback.sent_at is not None and sib.ended_at <= callback.sent_at + 1.0:
+        for sib in siblings.get((parent.parent_key, parent.name), ()):
+            if sib.key != parent.key and sib.ended_at is not None and callback.sent_at is not None and sib.ended_at <= callback.sent_at + 1.0:
                 edges.append({"from": sib.key, "to": callback.key, "kind": "inferred_fanin"})
     return edges
 
