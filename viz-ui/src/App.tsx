@@ -52,7 +52,7 @@ export default function App() {
         <a href={`http://${location.hostname}:15672`} target="_blank" rel="noreferrer" title="Queues, exchanges, consumers">RabbitMQ ↗</a>
       </header>
 
-      <aside className="left">
+      <aside className="left" aria-label="Launch workflows and choose a run">
         <section><h2>Launch a workflow</h2><Launch catalog={catalog} onLaunched={() => { followSince.current = Date.now() / 1000; }} /></section>
         <section>
           <h2>Runs</h2>
@@ -81,7 +81,7 @@ export default function App() {
         <section className="queues-section"><h2>Queues (measured by the broker)</h2><QueuePanel queues={queues} config={config} /></section>
       </main>
 
-      <aside className="right">
+      <aside className="right" aria-label="Inspector" tabIndex={0}>
         <h2>{task ? "Task" : "What does this state mean?"}</h2>
         {stream.table ? <Inspector table={stream.table} config={config} task={task} legendKey={legendKey} /> : <p className="muted">Connecting…</p>}
       </aside>

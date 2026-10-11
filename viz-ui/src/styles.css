@@ -1,15 +1,15 @@
 /* Colors are tokens keyed by the `tone` field of states.json. Add a tone there, add one line here. */
 :root {
-  --bg: #f6f7f9; --panel: #fff; --text: #1b2330; --muted: #667085; --line: #e3e7ee; --accent: #3b5bdb;
-  --tone-queue: #4c8dff; --tone-reserved: #7c6cf0; --tone-scheduled: #14a39a; --tone-work: #e08a00;
-  --tone-ok: #2f9e55; --tone-bad: #d9363e; --tone-warn: #d97706; --tone-muted: #8b94a5;
+  --bg: #f6f7f9; --panel: #fff; --text: #1b2330; --muted: #566074; --line: #e3e7ee; --accent: #3b5bdb; --on-accent: #fff;
+  --tone-queue: #325da8; --tone-reserved: #5c50b2; --tone-scheduled: #0d6a64; --tone-work: #865300;
+  --tone-ok: #206b3a; --tone-bad: #ae2b32; --tone-warn: #8d4d04; --tone-muted: #595f6a;
   --ball-ms: 700ms;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #11151c; --panel: #1a202a; --text: #e6eaf1; --muted: #98a2b3; --line: #2a3340; --accent: #7b93ff;
-    --tone-queue: #6aa3ff; --tone-reserved: #9d90ff; --tone-scheduled: #3cc4ba; --tone-work: #f0a62a;
-    --tone-ok: #4cc27a; --tone-bad: #f0626a; --tone-warn: #f2a03a; --tone-muted: #8b94a5;
+    --bg: #11151c; --panel: #1a202a; --text: #e6eaf1; --muted: #98a2b3; --line: #2a3340; --accent: #7b93ff; --on-accent: #0f1420;
+    --tone-queue: #6aa3ff; --tone-reserved: #a093ff; --tone-scheduled: #3cc4ba; --tone-work: #f0a62a;
+    --tone-ok: #4cc27a; --tone-bad: #ff7a80; --tone-warn: #f2a03a; --tone-muted: #a9b1c0;
   }
 }
 * { box-sizing: border-box; }
@@ -100,7 +100,7 @@ footer { grid-area: f; background: var(--panel); border-top: 1px solid var(--lin
 /* launcher */
 .scenario { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; } .scenario summary { cursor: pointer; font-weight: 600; }
 .param { display: grid; gap: 2px; margin: 6px 0; } .param select, .param input { padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; }
-.primary { margin-top: 6px; padding: 5px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; } .primary:disabled { opacity: .6; cursor: progress; }
+.primary { margin-top: 6px; padding: 5px 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; } .primary:disabled { opacity: .6; cursor: progress; }
 .empty { padding: 40px; text-align: center; }
 
 /* keyboard focus: visible, and never colour-only */
