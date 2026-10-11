@@ -19,7 +19,7 @@ up: ## build + start the whole stack in hardened mode
 	@echo "  API       $(API)/docs"
 	@echo "  Flower    http://localhost:5555"
 	@echo "  RabbitMQ  http://localhost:15672   (pipeline / pipeline)"
-	@echo "  Viz API   http://localhost:8200/api/health"
+	@echo "  Visualizer http://localhost:8200"
 	@echo "  PostgreSQL jdbc:postgresql://localhost:$(POSTGRES_PORT)/pipeline?user=pipeline&password=pipeline"
 	@echo ""
 	@echo "Next: make trigger"

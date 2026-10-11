@@ -40,7 +40,7 @@ def build(args: argparse.Namespace):
     return app, source
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="celery_viz", description="Read-only Celery workflow visualizer.")
     ap.add_argument("--broker", default=os.environ.get("BROKER_URL"), help="broker URL of the Celery deployment to observe")
     ap.add_argument("--replay", help="replay a recorded events file (one JSON object per line) instead of connecting")
@@ -51,13 +51,19 @@ def main() -> None:
     ap.add_argument("--lost-after", type=float, default=12.0, help="never call a worker lost before this many seconds of silence (it is also at least 3x the worker's own heartbeat period)")
     ap.add_argument("--drain-grace", type=float, default=35.0, help="how long a worker that announced shutdown may keep running tasks before they count as lost (match your orchestrator's stop grace period)")
     ap.add_argument("--queue-metrics-url", help="RabbitMQ Prometheus endpoint for measured ready/unacked, e.g. http://rabbitmq:15692/metrics/detailed?family=queue_coarse_metrics")
-    ap.add_argument("--catalog", help="enable launching: 'package.module:object' providing describe()/launch(). Off by default (read-only)")
+    ap.add_argument("--catalog", default=os.environ.get("CELERY_VIZ_CATALOG") or None,
+                    help="enable launching: 'package.module:object' providing describe()/launch(). Off by default (read-only). "
+                         "Default: $CELERY_VIZ_CATALOG")
     ap.add_argument("--ui-dir", help="directory with the built UI (default: celery_viz/ui_dist when present)")
     ap.add_argument("--ignore-task", action="append", default=[], metavar="NAME", help="drop this task name entirely (repeatable), e.g. a periodic sweep that would flood the run list")
     ap.add_argument("--max-runs", type=int, default=500)
     ap.add_argument("--keep-args", action="store_true", help="keep task args/kwargs (default: dropped; may contain personal data)")
     ap.add_argument("--keep-result", action="store_true", help="keep task results (default: dropped)")
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> None:
+    args = build_parser().parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     app, source = build(args)
     source.start()
