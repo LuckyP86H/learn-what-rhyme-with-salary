@@ -76,7 +76,7 @@ to this workflow, and why?"*.
 
 - **Python backend, static front end.** The data source is Celery's event stream, which is Python. The UI is built
   by Node at image-build time and served as plain files, so no Node runs in production.
-- **Read-only by default.** There is no endpoint that sends, revokes or purges anything. The demo stack enables an
-  opt-in launcher that can only start *named* scenarios with validated parameters.
+- **Read-only by default.** There is no endpoint that sends, revokes or purges anything. The demo stack enables a
+  launcher (switch it off with `VIZ_CATALOG=`) that can only start *named* scenarios with validated parameters.
 - **Payloads are dropped before storage.** Task arguments, results and tracebacks never enter the store unless you opt in.
 - **Exclusive event and control queues.** Required by RabbitMQ 4.3+; see [RabbitMQ 4 and Celery](rabbitmq4-deprecations.md).

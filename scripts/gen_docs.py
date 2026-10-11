@@ -123,6 +123,7 @@ def cli_md() -> str:
         ("Spot-eviction simulator: `python3 app/chaos/spot_killer.py`", ["app/chaos/spot_killer.py"], "Runs on the host and shells out to `docker`. Used by `make test-spot`."),
         ("Prefetch experiment: `python3 app/chaos/prefetch_demo.py`", ["app/chaos/prefetch_demo.py"], "Used by `make test-prefetch`."),
         ("Ground-truth check: `python3 scripts/check_viz.py`", ["scripts/check_viz.py"], "Used by `make viz-check`."),
+        ("Benchmark: `python scripts/bench_viz.py`", ["scripts/bench_viz.py"], "Used by `make bench-viz`."),
     ]
     for title, cmd, blurb in tools:
         out.append(f"## {title}\n\n{blurb}\n\n```text\n{_help_of(*cmd)}```\n\n")
@@ -180,7 +181,7 @@ def services_md() -> str:
     for name, svc in compose["services"].items():
         desc = (svc.get("labels") or {}).get("description", "")
         image = svc.get("image", "")
-        image = re.sub(r"\$\{(\w+):-([^}]*)\}", r"\2", image) if image else ""
+        image = re.sub(r"\$\{(\w+):?-([^}]*)\}", r"\2", image) if image else ""
         if name == "init-db":
             continue
         ports = []
@@ -219,7 +220,7 @@ def env_md() -> str:
     _, compose_text = _load_compose()
     compose_vars = []
     for line in compose_text.splitlines():
-        for m in re.finditer(r"\$\{(\w+):-([^}]*)\}", line):
+        for m in re.finditer(r"\$\{(\w+):?-([^}]*)\}", line):
             note = line.split("#", 1)[1].strip() if "#" in line else ""
             compose_vars.append((m.group(1), m.group(2), note))
     seen2: set[str] = set()

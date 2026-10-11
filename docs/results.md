@@ -67,3 +67,35 @@ silence; after the workers returned the chunks showed *Running* with a *redelive
 
 The ball's motion was measured, not assumed: sampled every 100 ms, its position moved 779, 783, 817, 852, 879,
 890, 895, 897 px over roughly 700 ms (an ease-out curve) when a task went from Running to Succeeded.
+
+## Scale of the visualizer
+
+Re-measure: `make bench-viz` (no broker needed). Synthetic events, 2026-10-10.
+
+| What | Measured |
+|---|---|
+| Event ingestion | about 450,000 events per second |
+| One pass over **500 runs of 10 tasks** (the server does this once a second) | about 10 ms, roughly 1% of a core |
+| One run with **1,500 parallel tasks** | about 4 ms to render, 3,001 edges |
+
+This was a real bug before it was a benchmark: chord-join inference scanned every task for every task, so a
+single run with 2,000 parallel tasks took **467 ms** per view, recomputed every second while holding the store lock
+(which also blocks the event collector). It is now linear; a regression test fails if it ever becomes quadratic again.
+
+The store caps a run at 2,000 tasks and drops further events for it (counted in `dropped_events` on `/api/health`),
+so one runaway workflow cannot take the monitor down. In the browser, a run past 100 tasks draws the first 100 plus
+every task that failed or needs attention, and folds the rest into a summary with a *Show all* button (checked on a
+synthetic 301-task run with two failures at positions 250 and 280).
+
+## Redis as the broker
+
+Re-measure: this is a manual check (no `make` target): run Redis, a Celery 5.6.3 worker with `-E`, and
+`python -m celery_viz --broker redis://...` on one network, then submit a chain. Verified 2026-10-10 in an isolated stack:
+
+| Check | Result |
+|---|---|
+| Monitor connects and receives events | yes |
+| Worker seen with its software and 2 s heartbeat period | yes |
+| A chain of 3 tasks | one run, 3 tasks, 2 `spawned` edges, all Succeeded |
+| A task submitted on its own | its own run |
+| Worker killed with SIGKILL | shown **lost** after about 12 s of silence |

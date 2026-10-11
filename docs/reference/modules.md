@@ -66,6 +66,7 @@ What each source file is. A blank description means the file has no header comme
 
 | File | What it is |
 |---|---|
+| [`scripts/bench_viz.py`](../../scripts/bench_viz.py) | Measure what the visualizer costs: event ingestion, a pass over many runs, and one huge run. |
 | [`scripts/check_viz.py`](../../scripts/check_viz.py) | Validate the live visualizer against ground truth (the pipeline's own database). |
 | [`scripts/gen_docs.py`](../../scripts/gen_docs.py) | Generate the reference pages in docs/reference/ from the things that are their source of truth. |
 | [`scripts/run_test_pipeline.sh`](../../scripts/run_test_pipeline.sh) | Trigger one call and watch it until it reaches a terminal state. |

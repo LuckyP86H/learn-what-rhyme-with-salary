@@ -21,6 +21,7 @@ Example: `RELIABILITY_MODE=default docker compose up -d --force-recreate worker-
 | `REDIS_PORT` | `6380` | 6380, not 6379: a native redis-server often owns 6379 and silently shadows the container |
 | `POSTGRES_PORT` | `5432` | host port for DB clients |
 | `API_PORT` | `8100` | 8100, not 8000: 8000 is a very common port on dev machines |
+| `VIZ_CATALOG` | `app.viz_catalog:catalog` | demo scenarios the UI can launch; set VIZ_CATALOG= (empty) for a purely read-only monitor |
 | `VIZ_PORT` | `8200` | host port of the visualizer |
 
 ## Read by the Python code (`config.py`)

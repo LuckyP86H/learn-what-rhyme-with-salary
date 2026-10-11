@@ -28,6 +28,7 @@ Run `make help` for the same list in the terminal. Variables such as `CHUNKS=8` 
 | `make lint` | check Python import ordering with Ruff |
 | `make lint-fix` | automatically organize Python imports with Ruff |
 | `make viz-check` | validate the visualizer against the database (submits calls; ~3 min, or CALLS=4 CHUNKS=2) |
+| `make bench-viz` | measure the visualizer's cost: ingestion rate, many runs, one huge run (no broker needed) |
 | `make ui` | build the visualizer UI into celery_viz/ui_dist (in a Node container; nothing installed on the host) |
 | `make ui-test` | UI typecheck + unit tests (in a Node container) |
 | `make test` | Python unit tests, run against the working tree (not the copy baked into the image) |

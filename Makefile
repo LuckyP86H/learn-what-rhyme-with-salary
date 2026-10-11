@@ -7,7 +7,7 @@ export API_PORT POSTGRES_PORT API
 
 .DEFAULT_GOAL := help
 .PHONY: help up down reset logs ps wait trigger trigger-retry trigger-bad trigger-poison trigger-bug status events dlq config \
-        lint lint-fix test-spot test-spot-default test-prefetch viz-check ui ui-test docs docs-check test flower rabbitmq police-now psql
+        lint lint-fix test-spot test-spot-default test-prefetch viz-check bench-viz ui ui-test docs docs-check test flower rabbitmq police-now psql
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -85,6 +85,9 @@ lint-fix: ## automatically organize Python imports with Ruff
 
 viz-check: ## validate the visualizer against the database (submits calls; ~3 min, or CALLS=4 CHUNKS=2)
 	python3 scripts/check_viz.py --calls $(or $(CALLS),15) --chunks $(or $(CHUNKS),3)
+
+bench-viz: ## measure the visualizer's cost: ingestion rate, many runs, one huge run (no broker needed)
+	$(COMPOSE) run --rm --no-deps -T -v "$$PWD":/srv api python scripts/bench_viz.py
 
 ui: ## build the visualizer UI into celery_viz/ui_dist (in a Node container; nothing installed on the host)
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:24-slim sh -c "npm ci --no-audit --no-fund && npm run build"

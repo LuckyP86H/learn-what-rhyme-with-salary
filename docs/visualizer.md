@@ -59,9 +59,14 @@ Launch them from the left panel. Each can make one task misbehave, which is how 
 The fault options for the chord are the [pipeline's faults](pipeline.md#failures-on-purpose); the plain scenarios
 support `none`, `transient`, `permanent` and `slow`.
 
-Launching is **opt-in**: the monitor starts with it off. The demo stack enables it with `--catalog`; remove that flag
-from the `viz` service (see [reference/services.md](reference/services.md)) for a purely read-only monitor. Only the
-named scenarios can run, and their parameters are validated; there is no way to send an arbitrary task or arguments.
+Launching is a **switch**, and it is on in the demo stack. Only the named scenarios can run, their parameters are
+validated, and there is no way to send an arbitrary task or arguments. For a purely read-only monitor:
+
+```bash
+VIZ_CATALOG= make up      # the catalog reports itself disabled and POST /api/launch returns 404
+```
+
+A monitor started on its own (`python -m celery_viz`) has launching **off** unless you pass `--catalog` or set `CELERY_VIZ_CATALOG`.
 
 ## Known limits
 
@@ -77,7 +82,9 @@ named scenarios can run, and their parameters are validated; there is no way to 
   its own `acks_late` can differ. The value is flagged when workers disagree.
 - **When the ack happens is not observable from events**; the queue panel shows the broker's measured counts instead.
 - **Events are lossy.** The monitor keeps one consumer open to avoid dropping events, but a broker restart can lose some.
-- **Not verified:** Redis as the broker, a screen-reader pass, and dozens of simultaneous tasks in one run.
+- **Very large runs are folded.** Past 100 tasks the UI draws the first 100 plus *every* task that failed or needs attention, and
+  summarises the rest with a *Show all* button.
+- **Not verified:** a real screen-reader pass (rows are keyboard-focusable and have accessible names, but that is not the same thing).
 
 ## Use it with your own project
 
@@ -102,7 +109,8 @@ The monitor only needs the broker URL; it never imports your code.
 |---|---|
 | Monitor and workers on Celery 5.6.3, RabbitMQ 4.2 and 4.3 | verified live |
 | Monitor 5.6.3 reading a Celery 4.4.7 fleet | verified from recorded events: same fields, chains reconstruct; chord headers submitted directly by a client are not groupable |
-| Redis as the broker; other Celery versions | **not verified** |
+| Redis as the broker (events, chain edges, lost-worker detection) | verified live in an isolated stack |
+| Other Celery versions | **not verified** |
 
 ## Extending it
 

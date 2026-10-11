@@ -137,7 +137,7 @@ services:
   # Loopback only: there is no authentication.
   viz:
     labels:
-      description: "The workflow visualizer: API plus web UI. Observes the event stream; launching demo scenarios is opt-in (--catalog)."
+      description: "The workflow visualizer: API plus web UI. Observes the event stream; launching demo scenarios is on in this demo; switch it off with VIZ_CATALOG= (empty)."
     <<: *app
     environment:
       <<: *app-env

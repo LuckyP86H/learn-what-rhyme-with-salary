@@ -34,6 +34,14 @@ See [Visualizer: use it with your own project](visualizer.md#use-it-with-your-ow
    several tasks from the client.
 4. Document it in the [Visualizer](visualizer.md#the-demo-scenarios) table (`make docs-check` fails until its id appears there).
 
+## Run the visualizer read-only
+
+```bash
+VIZ_CATALOG= make up
+```
+
+The launch panel then says "Read-only mode" and the API refuses launches. See [Visualizer](visualizer.md#the-demo-scenarios).
+
 ## Describe a new task state
 
 Edit `celery_viz/states.json`, then `make docs`. Pick a `station` and `tone` that already exist, or add a `tone`

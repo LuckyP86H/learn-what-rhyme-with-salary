@@ -35,7 +35,7 @@ options:
                         RabbitMQ Prometheus endpoint for measured ready/unacked, e.g.
                         http://rabbitmq:15692/metrics/detailed?family=queue_coarse_metrics
   --catalog CATALOG     enable launching: 'package.module:object' providing describe()/launch().
-                        Off by default (read-only)
+                        Off by default (read-only). Default: $CELERY_VIZ_CATALOG
   --ui-dir UI_DIR       directory with the built UI (default: celery_viz/ui_dist when present)
   --ignore-task NAME    drop this task name entirely (repeatable), e.g. a periodic sweep that
                         would flood the run list
@@ -149,5 +149,27 @@ options:
   --calls CALLS
   --chunks CHUNKS
   --timeout TIMEOUT
+```
+
+## Benchmark: `python scripts/bench_viz.py`
+
+Used by `make bench-viz`.
+
+```text
+usage: bench_viz.py [-h] [--runs RUNS] [--tasks-per-run TASKS_PER_RUN] [--fan-out FAN_OUT]
+
+Measure what the visualizer costs: event ingestion, a pass over many runs, and one huge run.
+
+    python scripts/bench_viz.py                 # 500 runs x 10 tasks, plus a 1500-task run
+    python scripts/bench_viz.py --runs 100 --fan-out 500
+
+Needs no broker: it builds a store from synthetic events. Used by `make bench-viz`.
+
+options:
+  -h, --help            show this help message and exit
+  --runs RUNS           number of runs in the many-runs test
+  --tasks-per-run TASKS_PER_RUN
+  --fan-out FAN_OUT     parallel tasks in the one-huge-run test (the store caps a run at 2000
+                        tasks)
 ```
 
