@@ -12,12 +12,18 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
+from celery_viz.catalog import Catalog, clean_params
 from celery_viz.derive import run_summary, run_view, workers_view
+from celery_viz.queues import fetch_queue_stats
+from celery_viz.remote_config import RemoteConfig
 from celery_viz.states import load_states
 from celery_viz.store import RunStore
 
@@ -98,8 +104,18 @@ async def event_stream(store: RunStore, is_disconnected: Callable[[], Awaitable[
             store.listeners.remove(on_change)
 
 
-def create_app(store: RunStore, source: Any | None = None, mode: str = "live") -> FastAPI:
-    """`source` is anything with .status() (an EventCollector or ReplayDriver)."""
+class LaunchRequest(BaseModel):
+    scenario: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+def create_app(store: RunStore, source: Any | None = None, mode: str = "live", *, catalog: Catalog | None = None,
+               queue_metrics_url: str | None = None, remote_config: RemoteConfig | None = None,
+               ui_dir: Path | None = None) -> FastAPI:
+    """`source` is anything with .status() (an EventCollector or ReplayDriver).
+
+    Read-only unless a `catalog` is supplied; even then only the catalog's named scenarios can be launched.
+    """
     app = FastAPI(title="celery-viz", description="Read-only Celery workflow visualizer API.")
 
     @app.get("/api/health")
@@ -130,6 +146,40 @@ def create_app(store: RunStore, source: Any | None = None, mode: str = "live") -
         with store.lock:
             return workers_view(store)
 
+    @app.get("/api/queues")
+    def queues() -> dict[str, Any]:
+        """Measured ready/unacked per queue, from RabbitMQ's Prometheus plugin (RabbitMQ only, optional)."""
+        if not queue_metrics_url:
+            return {"available": False, "queues": [], "reason": "no --queue-metrics-url configured"}
+        try:
+            return {"available": True, "queues": fetch_queue_stats(queue_metrics_url)}
+        except Exception as exc:  # broker down / plugin disabled: degrade, do not fail the page
+            return {"available": False, "queues": [], "reason": f"{type(exc).__name__}: {exc}"[:200]}
+
+    @app.get("/api/config")
+    def config() -> dict[str, Any]:
+        """Global settings in effect on live workers (only those the state table references)."""
+        if remote_config is None:
+            return {"settings": {}, "workers": {}, "error": "not available in replay mode"}
+        return remote_config.get()
+
+    @app.get("/api/catalog")
+    def get_catalog() -> dict[str, Any]:
+        return {"enabled": catalog is not None, "scenarios": catalog.describe() if catalog else []}
+
+    @app.post("/api/launch", status_code=202)
+    def launch(body: LaunchRequest) -> dict[str, Any]:
+        if catalog is None:
+            raise HTTPException(404, "launching is disabled: start celery_viz with --catalog to enable it")
+        scenario = next((s for s in catalog.describe() if s["id"] == body.scenario), None)
+        if scenario is None:
+            raise HTTPException(404, f"unknown scenario {body.scenario!r}")
+        try:
+            params = clean_params(scenario["params"], body.params)
+            return {"scenario": body.scenario, "started": catalog.launch(body.scenario, params)}
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     @app.get("/api/stream")
     async def stream(request: Request) -> StreamingResponse:
         return StreamingResponse(
@@ -138,4 +188,6 @@ def create_app(store: RunStore, source: Any | None = None, mode: str = "live") -
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},  # no proxy buffering
         )
 
+    if ui_dir is not None and ui_dir.is_dir():  # mounted last so it never shadows /api
+        app.mount("/", StaticFiles(directory=ui_dir, html=True), name="ui")
     return app

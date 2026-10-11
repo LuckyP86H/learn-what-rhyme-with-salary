@@ -1,0 +1,85 @@
+# TYPE rabbitmq_detailed_queue_messages_ready gauge
+# HELP rabbitmq_detailed_queue_messages_ready Messages ready to be delivered to consumers
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="heavy_processing"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="core@8a52e95a0f5a.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="spot@6a5da1ac5e13.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="dead_letter"} 4
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="celeryev.899d3005-48fb-40d1-be03-9cfa7fdb700b"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="spot@7119b6d9cbce.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="priority"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="celeryev.09d39ac6-2712-4c00-88ae-87acee9dbd24"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="celeryev.251dedcd-fb22-4230-9c80-5bd68a533c60"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="celeryev.7f652e12-1345-483a-bd9c-19dc689e227f"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="default"} 0
+rabbitmq_detailed_queue_messages_ready{vhost="/",queue="celeryev.f5656321-5f3d-46d1-a761-5f844dee8d2d"} 0
+# TYPE rabbitmq_detailed_queue_messages_unacked gauge
+# HELP rabbitmq_detailed_queue_messages_unacked Messages delivered to consumers but not yet acknowledged
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="heavy_processing"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="core@8a52e95a0f5a.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="spot@6a5da1ac5e13.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="dead_letter"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="celeryev.899d3005-48fb-40d1-be03-9cfa7fdb700b"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="spot@7119b6d9cbce.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="priority"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="celeryev.09d39ac6-2712-4c00-88ae-87acee9dbd24"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="celeryev.251dedcd-fb22-4230-9c80-5bd68a533c60"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="celeryev.7f652e12-1345-483a-bd9c-19dc689e227f"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="default"} 0
+rabbitmq_detailed_queue_messages_unacked{vhost="/",queue="celeryev.f5656321-5f3d-46d1-a761-5f844dee8d2d"} 0
+# TYPE rabbitmq_detailed_queue_messages gauge
+# HELP rabbitmq_detailed_queue_messages Sum of ready and unacknowledged messages - total queue depth
+rabbitmq_detailed_queue_messages{vhost="/",queue="heavy_processing"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="core@8a52e95a0f5a.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="spot@6a5da1ac5e13.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="dead_letter"} 4
+rabbitmq_detailed_queue_messages{vhost="/",queue="celeryev.899d3005-48fb-40d1-be03-9cfa7fdb700b"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="spot@7119b6d9cbce.celery.pidbox"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="priority"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="celeryev.09d39ac6-2712-4c00-88ae-87acee9dbd24"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="celeryev.251dedcd-fb22-4230-9c80-5bd68a533c60"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="celeryev.7f652e12-1345-483a-bd9c-19dc689e227f"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="default"} 0
+rabbitmq_detailed_queue_messages{vhost="/",queue="celeryev.f5656321-5f3d-46d1-a761-5f844dee8d2d"} 0
+# TYPE rabbitmq_detailed_queue_process_reductions_total counter
+# HELP rabbitmq_detailed_queue_process_reductions_total Total number of queue process reductions
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="heavy_processing"} 290299
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="core@8a52e95a0f5a.celery.pidbox"} 145752
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="spot@6a5da1ac5e13.celery.pidbox"} 144454
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="dead_letter"} 22889
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="celeryev.899d3005-48fb-40d1-be03-9cfa7fdb700b"} 513629
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="spot@7119b6d9cbce.celery.pidbox"} 144302
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="priority"} 224994
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="celeryev.09d39ac6-2712-4c00-88ae-87acee9dbd24"} 512550
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="celeryev.251dedcd-fb22-4230-9c80-5bd68a533c60"} 429472
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="celeryev.7f652e12-1345-483a-bd9c-19dc689e227f"} 430664
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="default"} 152987
+rabbitmq_detailed_queue_process_reductions_total{vhost="/",queue="celeryev.f5656321-5f3d-46d1-a761-5f844dee8d2d"} 430943
+# TYPE rabbitmq_detailed_queue_info gauge
+# HELP rabbitmq_detailed_queue_info A metric with a constant '1' value and labels that provide some queue details
+rabbitmq_detailed_queue_info{vhost="/",queue="default",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="celeryev.7f652e12-1345-483a-bd9c-19dc689e227f",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="celeryev.899d3005-48fb-40d1-be03-9cfa7fdb700b",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="celeryev.f5656321-5f3d-46d1-a761-5f844dee8d2d",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="celeryev.251dedcd-fb22-4230-9c80-5bd68a533c60",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="celeryev.09d39ac6-2712-4c00-88ae-87acee9dbd24",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="priority",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="dead_letter",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="spot@6a5da1ac5e13.celery.pidbox",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="spot@7119b6d9cbce.celery.pidbox",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="core@8a52e95a0f5a.celery.pidbox",queue_type="rabbit_classic_queue",membership="leader"} 1
+rabbitmq_detailed_queue_info{vhost="/",queue="heavy_processing",queue_type="rabbit_classic_queue",membership="leader"} 1
+# TYPE rabbitmq_build_info untyped
+# HELP rabbitmq_build_info RabbitMQ & Erlang/OTP version info
+rabbitmq_build_info{rabbitmq_version="4.3.6",prometheus_plugin_version="4.3.6",prometheus_client_version="6.1.1",erlang_version="27.3.4.18"} 1
+# TYPE rabbitmq_identity_info untyped
+# HELP rabbitmq_identity_info RabbitMQ node & cluster identity info
+rabbitmq_identity_info{rabbitmq_node="rabbit@c071bf3190d7",rabbitmq_cluster="rabbit@c071bf3190d7",rabbitmq_cluster_permanent_id="rabbitmq-cluster-id-LFSiiHiu_uYF-mlgC8EinA",rabbitmq_endpoint="detailed"} 1
+# TYPE telemetry_scrape_size_bytes summary
+# HELP telemetry_scrape_size_bytes Scrape size, not encoded
+telemetry_scrape_size_bytes_count{registry="detailed",content_type="text/plain; version=0.0.4"} 1
+telemetry_scrape_size_bytes_sum{registry="detailed",content_type="text/plain; version=0.0.4"} 7645
+# TYPE telemetry_scrape_duration_seconds summary
+# HELP telemetry_scrape_duration_seconds Scrape duration
+telemetry_scrape_duration_seconds_count{registry="detailed",content_type="text/plain; version=0.0.4"} 1
+telemetry_scrape_duration_seconds_sum{registry="detailed",content_type="text/plain; version=0.0.4"} 0.002817902
+

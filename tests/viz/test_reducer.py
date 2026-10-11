@@ -283,3 +283,51 @@ def test_a_worker_that_comes_back_is_no_longer_draining():
     store.apply({"type": "worker-online", "hostname": "w@1", "freq": 2, "timestamp": 13.0, "local_received": 13.0})
     assert store.workers["w@1"].offline_since_local is None
     assert effective_state(task, store, 14.0)[0] == "STARTED"
+
+
+def test_ignored_task_names_vanish_including_their_later_nameless_events():
+    from celery_viz.config import VizConfig
+
+    store = RunStore(VizConfig(ignore_tasks=("t.noise",)))
+    for etype, extra in (("task-sent", {"name": "t.noise", "root_id": "n"}), ("task-received", {"name": "t.noise", "root_id": "n"}), ("task-started", {}), ("task-succeeded", {"runtime": 0.1})):
+        store.apply({"type": etype, "uuid": "n", "hostname": "w@1", "retries": 0, "timestamp": 1.0, "local_received": 1.0, **extra})
+    store.apply({"type": "task-sent", "uuid": "real", "name": "t.real", "root_id": "real", "retries": 0, "timestamp": 2.0, "local_received": 2.0})
+    assert set(store.tasks) == {"real:0"}, "started/succeeded carry no name, so the remembered id must be what filters them"
+
+
+def test_a_reserved_task_on_a_shutting_down_worker_goes_back_to_the_queue_not_draining():
+    # Found live: only RUNNING tasks drain in a warm shutdown; reserved ones are requeued by the broker.
+    store = RunStore()
+    for etype, extra in (("task-sent", {"name": "t.x", "root_id": "u", "retries": 0}), ("task-received", {"name": "t.x", "root_id": "u", "retries": 0})):
+        store.apply({"type": etype, "uuid": "u", "hostname": "w@1", "timestamp": 10.0, "local_received": 10.0, **extra})
+    store.apply({"type": "worker-offline", "hostname": "w@1", "freq": 2, "timestamp": 12.0, "local_received": 12.0})
+    state, note = effective_state(store.tasks["u:0"], store, 14.0)
+    assert state == "QUEUED" and "go back on the queue" in note
+
+
+def test_a_huge_fan_out_renders_in_linear_time():
+    # Regression found by load testing: fan-in inference scanned every task for every task, so a run with 2000
+    # parallel tasks took ~470 ms per view, recomputed every second while holding the store lock.
+    import time
+
+    store = RunStore()
+    clock = [1000.0]
+
+    def ev(etype, uuid, **kw):
+        clock[0] += 0.001
+        store.apply({"type": etype, "uuid": uuid, "hostname": "w@1", "retries": 0, "timestamp": clock[0], "local_received": clock[0], **kw})
+
+    ev("task-sent", "root", name="tasks.parent", root_id="root")
+    n = 1500
+    for i in range(n):
+        ev("task-sent", f"c{i}", name="tasks.child", root_id="root", parent_id="root")
+        ev("task-received", f"c{i}", name="tasks.child", root_id="root", parent_id="root")
+        ev("task-started", f"c{i}")
+        ev("task-succeeded", f"c{i}", runtime=1.0)
+    ev("task-sent", "root", name="tasks.join", root_id="root", parent_id=f"c{n - 1}")
+    start = time.perf_counter()
+    view = run_view(store, store.runs["root"])
+    elapsed = time.perf_counter() - start
+    joins = [e for e in view["edges"] if e["kind"] == "inferred_fanin"]
+    assert len(joins) == n - 1, "every other finished sibling is joined to the callback"
+    assert elapsed < 0.25, f"run_view took {elapsed * 1000:.0f} ms for {n} tasks (it was ~250 ms+ when quadratic)"

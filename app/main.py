@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from app.calls import PublishFailed, start_call
 from app.celery_app import celery_app
 from app.logging_config import configure_logging
 from config import settings
@@ -100,18 +101,11 @@ def reliability_config() -> dict[str, Any]:
 
 @app.post("/calls", status_code=202)
 def create_call(body: CreateCall) -> dict[str, Any]:
-    with session_scope() as s:
-        call = Call(title=body.title, num_chunks=body.num_chunks, faults={str(k): v for k, v in body.faults.items()})
-        s.add(call)
-        s.flush()
-        call_id = call.id
-    # Publish only after the row is committed so a worker can never see a call that doesn't exist yet.
-    # (The reverse failure, row committed but publish failed, leaves a PENDING call: the police fix that.)
     try:
-        celery_app.send_task("tasks.ingest_call", args=[call_id])
-    except Exception as exc:  # broker down
-        log.exception("could not publish ingest_call", extra={"call_id": call_id})
-        raise HTTPException(503, f"call {call_id} saved but could not be queued: {exc}") from exc
+        call_id = start_call(body.title, body.num_chunks, {str(k): v for k, v in body.faults.items()})
+    except PublishFailed as exc:  # broker down: the row exists as PENDING and the police will recover it
+        log.exception("could not publish ingest_call", extra={"call_id": exc.call_id})
+        raise HTTPException(503, str(exc)) from exc
     log.info("call accepted", extra={"call_id": call_id, "chunks": body.num_chunks})
     return {"call_id": call_id, "status": "PENDING"}
 

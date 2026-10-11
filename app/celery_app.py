@@ -7,7 +7,7 @@ from celery.signals import setup_logging, worker_process_init
 from app.logging_config import configure_logging
 from config import build_celery_config, settings
 
-celery_app = Celery("call_pipeline", include=["app.tasks.pipeline", "app.tasks.police"])
+celery_app = Celery("call_pipeline", include=["app.tasks.pipeline", "app.tasks.police", "app.tasks.meeting"])
 celery_app.conf.update(build_celery_config())
 
 

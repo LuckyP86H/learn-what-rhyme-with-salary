@@ -219,3 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 /.vscode
+
+# celery_viz front end: dependencies and build output (built in the Docker image / by `make ui`)
+viz-ui/node_modules/
+celery_viz/ui_dist/

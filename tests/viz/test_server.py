@@ -128,3 +128,13 @@ def test_replay_driver_feeds_the_store_and_finishes():
     assert driver.finished and driver.events_seen == 60
     assert store.tasks
     assert driver.status()["replay_finished"] is True
+
+
+def test_monitor_queues_are_exclusive_so_it_works_on_rabbitmq_4_3():
+    # Found live: the event queue was exclusive but the control (inspect reply) queue was not, so only
+    # /api/config broke on RabbitMQ 4.3. Both must stay exclusive.
+    from celery_viz.collector import EventCollector
+
+    collector = EventCollector("memory://", RunStore())
+    assert collector.app.conf.event_queue_exclusive is True
+    assert collector.app.conf.control_queue_exclusive is True
