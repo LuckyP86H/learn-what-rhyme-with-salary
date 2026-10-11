@@ -99,3 +99,20 @@ Re-measure: this is a manual check (no `make` target): run Redis, a Celery 5.6.3
 | A chain of 3 tasks | one run, 3 tasks, 2 `spawned` edges, all Succeeded |
 | A task submitted on its own | its own run |
 | Worker killed with SIGKILL | shown **lost** after about 12 s of silence |
+
+## Accessibility
+
+Verified 2026-10-10 with [axe-core](https://github.com/dequelabs/axe-core) (a WCAG rules engine) run against the live
+UI in **both colour schemes**, over 45 page states each: six runs, their task rows, all 14 legend states and the open
+launcher. Result: **no violations** in either scheme.
+
+How to repeat it (manual; there is no `make` target, because contrast needs a real browser):
+`npm pack axe-core`, copy `axe.min.js` into `celery_viz/ui_dist/` of the running `viz` container, load it as a script in
+the page, and call `axe.run(document)` after selecting different runs, tasks and legend states. Remove the file afterwards.
+
+What it found and what changed: small-text contrast was below 4.5:1 in places (dark-mode red 4.41, dark-mode muted
+pill 4.04, white text on the dark-mode accent button 2.81, and in light mode most tone colours at 3.0 to 3.4), two
+unnamed landmarks, and a scrollable inspector unreachable by keyboard. The colour palettes are now **computed**: each
+tone keeps its hue and is darkened (light) or lightened (dark) until it reaches 4.6:1 on every surface it appears on.
+
+Not covered: a real screen-reader pass, and zoom/reflow beyond the default layout.

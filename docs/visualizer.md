@@ -84,7 +84,9 @@ A monitor started on its own (`python -m celery_viz`) has launching **off** unle
 - **Events are lossy.** The monitor keeps one consumer open to avoid dropping events, but a broker restart can lose some.
 - **Very large runs are folded.** Past 100 tasks the UI draws the first 100 plus *every* task that failed or needs attention, and
   summarises the rest with a *Show all* button.
-- **Not verified:** a real screen-reader pass (rows are keyboard-focusable and have accessible names, but that is not the same thing).
+- **Accessibility:** task rows are keyboard-focusable with accessible names, motion respects *reduce motion*, state is never
+  conveyed by colour alone (every ball has a text label), and an automated axe-core check is clean in light and dark mode
+  ([results](results.md#accessibility)). **Not done:** a real screen-reader pass.
 
 ## Use it with your own project
 
