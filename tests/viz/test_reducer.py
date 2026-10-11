@@ -303,3 +303,31 @@ def test_a_reserved_task_on_a_shutting_down_worker_goes_back_to_the_queue_not_dr
     store.apply({"type": "worker-offline", "hostname": "w@1", "freq": 2, "timestamp": 12.0, "local_received": 12.0})
     state, note = effective_state(store.tasks["u:0"], store, 14.0)
     assert state == "QUEUED" and "go back on the queue" in note
+
+
+def test_a_huge_fan_out_renders_in_linear_time():
+    # Regression found by load testing: fan-in inference scanned every task for every task, so a run with 2000
+    # parallel tasks took ~470 ms per view, recomputed every second while holding the store lock.
+    import time
+
+    store = RunStore()
+    clock = [1000.0]
+
+    def ev(etype, uuid, **kw):
+        clock[0] += 0.001
+        store.apply({"type": etype, "uuid": uuid, "hostname": "w@1", "retries": 0, "timestamp": clock[0], "local_received": clock[0], **kw})
+
+    ev("task-sent", "root", name="tasks.parent", root_id="root")
+    n = 1500
+    for i in range(n):
+        ev("task-sent", f"c{i}", name="tasks.child", root_id="root", parent_id="root")
+        ev("task-received", f"c{i}", name="tasks.child", root_id="root", parent_id="root")
+        ev("task-started", f"c{i}")
+        ev("task-succeeded", f"c{i}", runtime=1.0)
+    ev("task-sent", "root", name="tasks.join", root_id="root", parent_id=f"c{n - 1}")
+    start = time.perf_counter()
+    view = run_view(store, store.runs["root"])
+    elapsed = time.perf_counter() - start
+    joins = [e for e in view["edges"] if e["kind"] == "inferred_fanin"]
+    assert len(joins) == n - 1, "every other finished sibling is joined to the callback"
+    assert elapsed < 0.25, f"run_view took {elapsed * 1000:.0f} ms for {n} tasks (it was ~250 ms+ when quadratic)"
