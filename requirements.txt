@@ -2,11 +2,15 @@
 # Celery's own deps (kombu, amqp, billiard, redis client) are pinned transitively by celery==5.6.3.
 celery[redis]==5.6.3
 flower==2.2.0
-fastapi==0.143.0
+fastapi==0.162.0
 uvicorn[standard]==0.54.0
-sqlalchemy==2.1.4
+sqlalchemy==2.1.6
 psycopg[binary]==3.3.6
 httpx==0.28.1
+# CA bundle for httpx — floored at the first release that removed the
+# compromised emSign intermediate CAs (eMudhra/emSign incident, Oct 2026).
+# httpx pulls certifi transitively; without this line the version floats.
+certifi>=2026.10.19
 # tests and import linting
 pytest==9.1.1
-ruff==0.17.0
+ruff==0.17.2
