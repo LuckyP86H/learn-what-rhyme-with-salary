@@ -164,6 +164,13 @@ TASK_ROUTES = {
     "tasks.merge_and_finalize": {"queue": "default"},
     "tasks.on_pipeline_failure": {"queue": "default"},
     "tasks.police_sweep": {"queue": "priority"},
+    # plain demo tasks for the visualizer's scenarios (app/tasks/meeting.py)
+    "tasks.meeting_summarize_one": {"queue": "default"},
+    "tasks.meeting_transcribe": {"queue": "heavy_processing"},
+    "tasks.meeting_summarize": {"queue": "default"},
+    "tasks.meeting_extract_actions": {"queue": "default"},
+    "tasks.meeting_translate": {"queue": "heavy_processing"},
+    "tasks.meeting_translate_all": {"queue": "default"},
 }
 
 

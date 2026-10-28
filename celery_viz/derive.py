@@ -59,7 +59,11 @@ def effective_state(task: Task, store: RunStore, now: float, silent: set[str] | 
     if state == "STARTED" and task.key in (silent_ended_keys(store) if silent is None else silent):
         return "ENDED_SILENTLY", f"{task.worker} reports it is no longer executing this, but no terminal event arrived"
     worker = store.workers.get(task.worker or "")
-    if state in ("RECEIVED", "STARTED") and worker is not None and worker.status == "offline":
+    if state == "RECEIVED" and worker is not None and worker.status == "offline":
+        # A warm shutdown only finishes tasks that are RUNNING. A merely reserved task is never started and its
+        # unacknowledged message goes back to the queue, so showing it as "draining" would be wrong.
+        return "QUEUED", f"{task.worker} announced shutdown before starting this; unacknowledged messages go back on the queue"
+    if state == "STARTED" and worker is not None and worker.status == "offline":
         if worker_is_draining(worker, now, store):
             return "DRAINING", f"{task.worker} announced shutdown; a warm shutdown lets in-flight tasks finish"
         return "WORKER_LOST", f"{task.worker} went offline and this task never finished"
@@ -75,15 +79,22 @@ def effective_state(task: Task, store: RunStore, now: float, silent: set[str] | 
 
 def _fan_in_edges(run_tasks: list[Task]) -> list[dict[str, str]]:
     """Chord join edges. Celery gives the callback only ONE parent (the last header task to finish),
-    so we infer the rest: finished siblings of that parent, same name, same spawner."""
+    so we infer the rest: finished siblings of that parent, same name, same spawner.
+
+    Indexed once so the cost stays linear: a run can hold thousands of parallel tasks and this runs
+    every second while the store lock is held.
+    """
+    by_key = {t.key: t for t in run_tasks}
+    siblings: dict[tuple[str | None, str | None], list[Task]] = {}
+    for t in run_tasks:
+        siblings.setdefault((t.parent_key, t.name), []).append(t)
     edges: list[dict[str, str]] = []
     for callback in run_tasks:
-        parent = next((t for t in run_tasks if t.key == callback.parent_key), None)
+        parent = by_key.get(callback.parent_key) if callback.parent_key else None
         if parent is None or parent.name == callback.name:
             continue
-        siblings = [t for t in run_tasks if t.key != parent.key and t.name == parent.name and t.parent_key == parent.parent_key]
-        for sib in siblings:
-            if sib.ended_at is not None and callback.sent_at is not None and sib.ended_at <= callback.sent_at + 1.0:
+        for sib in siblings.get((parent.parent_key, parent.name), ()):
+            if sib.key != parent.key and sib.ended_at is not None and callback.sent_at is not None and sib.ended_at <= callback.sent_at + 1.0:
                 edges.append({"from": sib.key, "to": callback.key, "kind": "inferred_fanin"})
     return edges
 

@@ -104,7 +104,8 @@ chunk `PENDING → PROCESSING → COMPLETED | FAILED`.
 | **beat** | Celery's scheduler: publishes the Task Police sweep periodically |
 
 The three settings that decide whether work survives a worker dying
-(full explanations are in [`config.py`](config.py)):
+(full explanations are in [`config.py`](config.py); for a real scenario and how to rehearse it see
+[`docs/acks-late.md`](docs/acks-late.md)):
 
 ```python
 task_acks_late = True              # ack AFTER the task finishes, not when it starts

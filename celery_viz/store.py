@@ -43,6 +43,7 @@ class RunStore:
         self.workers: dict[str, Worker] = {}
         self.started_on: dict[str, set[str]] = {}  # worker -> keys of tasks we believe are executing
         self.seq = 0
+        self.ignored: OrderedDict[str, None] = OrderedDict()  # ids of ignored tasks (bounded)
         self.dropped = 0  # events discarded because a run hit max_tasks_per_run
         self._virtual_now = 0.0
         self._terminal = {s.key for s in load_states().states.values() if s.phase in ("done_ok", "done_bad")}
@@ -62,6 +63,8 @@ class RunStore:
             if etype.startswith("worker-"):
                 self._worker_event(etype, event, local)
             elif etype.startswith("task-") and event.get("uuid"):
+                if self._ignored(event):
+                    return
                 handler = getattr(self, "_on_" + etype.replace("-", "_"), None)
                 if handler:
                     try:
@@ -75,6 +78,17 @@ class RunStore:
             listener(changed)
 
     # ------------------------------------------------------------------ helpers
+    def _ignored(self, event: dict[str, Any]) -> bool:
+        uuid = event["uuid"]
+        if uuid in self.ignored:
+            return True
+        if event.get("name") in self.config.ignore_tasks:
+            self.ignored[uuid] = None
+            while len(self.ignored) > 20000:
+                self.ignored.popitem(last=False)
+            return True
+        return False
+
     def _current(self, uuid: str) -> Task | None:
         keys = self.by_uuid.get(uuid)
         return self.tasks[keys[-1]] if keys else None

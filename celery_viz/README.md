@@ -4,7 +4,7 @@ A **read-only** monitor that explains what a Celery workflow is doing in terms o
 concepts. It listens to the event stream (`task-*`, `worker-*`), folds it into runs, and serves the
 result over HTTP + Server-Sent Events. It never publishes a task and never touches your code.
 
-> Status: **Phase 2** (core + collector + API + replay). The React UI is the next phase.
+> Status: core, collector, API, replay, and the React UI (served at `/` by the same process).
 
 ## Run it
 

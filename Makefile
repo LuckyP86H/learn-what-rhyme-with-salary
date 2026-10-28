@@ -7,7 +7,7 @@ export API_PORT POSTGRES_PORT API
 
 .DEFAULT_GOAL := help
 .PHONY: help up down reset logs ps wait trigger trigger-retry trigger-bad trigger-poison trigger-bug status events dlq config \
-        lint lint-fix test-spot test-spot-default test-prefetch viz-check test flower rabbitmq police-now psql
+        lint lint-fix test-spot test-spot-default test-prefetch viz-check ui ui-test test flower rabbitmq police-now psql
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -19,7 +19,7 @@ up: ## build + start the whole stack in hardened mode
 	@echo "  API       $(API)/docs"
 	@echo "  Flower    http://localhost:5555"
 	@echo "  RabbitMQ  http://localhost:15672   (pipeline / pipeline)"
-	@echo "  Viz API   http://localhost:8200/api/health"
+	@echo "  Visualizer http://localhost:8200"
 	@echo "  PostgreSQL jdbc:postgresql://localhost:$(POSTGRES_PORT)/pipeline?user=pipeline&password=pipeline"
 	@echo ""
 	@echo "Next: make trigger"
@@ -85,6 +85,12 @@ lint-fix: ## automatically organize Python imports with Ruff
 
 viz-check: ## validate the visualizer against the database (submits calls; ~3 min, or CALLS=4 CHUNKS=2)
 	python3 scripts/check_viz.py --calls $(or $(CALLS),15) --chunks $(or $(CHUNKS),3)
+
+ui: ## build the visualizer UI into celery_viz/ui_dist (in a Node container; nothing installed on the host)
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:24-slim sh -c "npm ci --no-audit --no-fund && npm run build"
+
+ui-test: ## UI typecheck + unit tests (in a Node container)
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:24-slim sh -c "npm ci --no-audit --no-fund && npm run typecheck && npm test"
 
 test: ## unit tests (inside the app image)
 	$(COMPOSE) run --rm --no-deps -T api python -m pytest -q -p no:cacheprovider

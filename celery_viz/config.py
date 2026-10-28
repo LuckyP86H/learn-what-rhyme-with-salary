@@ -19,6 +19,10 @@ class VizConfig:
     # Celery has no per-task heartbeat, so "hung" is a guess: running longer than this. None = off.
     hung_after_seconds: float | None = None
 
+    # Task names to drop entirely (periodic noise such as a beat-driven sweep). Matching is on the name
+    # seen in task-sent/received; the id is then remembered because later events carry no name.
+    ignore_tasks: tuple[str, ...] = ()
+
     # Memory bounds: the store is a ring buffer, never an archive.
     max_runs: int = 500
     max_tasks_per_run: int = 2000

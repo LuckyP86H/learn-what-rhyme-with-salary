@@ -34,6 +34,9 @@ class EventCollector(threading.Thread):
         # RabbitMQ 4.3+ refuses non-durable, non-exclusive queues, which is what Celery's event queue is
         # by default. Each receiver's queue is only ever used by that receiver, so exclusive is correct.
         self.app.conf.event_queue_exclusive = True
+        # `inspect` (used for the effective-settings panel) replies through a control queue that has the same
+        # problem. Without this, /api/config fails on RabbitMQ 4.3+ while everything else looks fine.
+        self.app.conf.control_queue_exclusive = True
         self.app.conf.broker_connection_retry_on_startup = True
 
     def _handle(self, event: dict[str, Any]) -> None:
