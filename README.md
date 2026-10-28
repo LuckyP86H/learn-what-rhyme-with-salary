@@ -11,11 +11,11 @@ POST /calls ──▶ ingest_call ──▶ chord( group( analyze_chunk × N ) �
 
 | Piece | Tech | Role |
 |---|---|---|
-| Broker | RabbitMQ 4.3 | Delivers task messages; ack/requeue/dead-letter semantics are what we study |
-| Result backend | Redis 8 | Celery results + chord bookkeeping |
+| Broker | RabbitMQ 4.4 | Delivers task messages; ack/requeue/dead-letter semantics are what we study |
+| Result backend | Redis 8.8 | Celery results + chord bookkeeping |
 | Durable state | PostgreSQL 18 | The workflow's source of truth (`calls`, `call_chunks`, `task_execution_log`) |
 | API | FastAPI | Starts calls, exposes state, peeks at the DLQ |
-| Workers | Celery 5.6.3 on Python 3.14.5 | `worker-spot` (×2, kills target) · `worker-core` (ingest, merge, police) · `beat` |
+| Workers | Celery 5.6.3 on Python 3.15.2 | `worker-spot` (×2, kills target) · `worker-core` (ingest, merge, police) · `beat` |
 | Observability | Flower, JSON logs | http://localhost:5555 |
 
 ## Quick start
@@ -214,9 +214,9 @@ whichever worker was free took the next message.
 
 ## Versions
 
-Everything is pinned: Python **3.14.5** (image `python:3.14.5-slim`), Python deps in `requirements.txt`
-(resolved on 3.14.5; all have prebuilt wheels), and infrastructure images in `docker-compose.yml`
-(RabbitMQ 4.3, Redis 8, PostgreSQL 18). Flower 2.2.0 runs from the project image so it shares the Celery config.
+Everything is pinned: Python **3.15.2** (image `python:3.15.2-slim`), Python deps in `requirements.txt`
+(resolved on 3.15.2; all have prebuilt wheels), and infrastructure images in `docker-compose.yml`
+(RabbitMQ 4.4, Redis 8.8, PostgreSQL 18). Flower 2.2.0 runs from the project image so it shares the Celery config.
 
 **RabbitMQ 4 is deprecating two things Celery uses by default**, and RabbitMQ 4.3 already refuses one of
 them: with stock Celery settings the workers silently stop consuming while the container stays "Up".
@@ -224,7 +224,7 @@ them: with stock Celery settings the workers silently stop consuming while the c
 (quorum queues) are in **[docs/rabbitmq4-deprecations.md](docs/rabbitmq4-deprecations.md)**.
 
 ```bash
-RABBITMQ_VERSION=4.2 make reset up   # run on another broker version (default 4.3)
+RABBITMQ_VERSION=4.2 make reset up   # run on another broker version (default 4.4)
 QUEUE_TYPE=quorum make reset up      # quorum queues instead of classic (needs a fresh broker)
 ```
 

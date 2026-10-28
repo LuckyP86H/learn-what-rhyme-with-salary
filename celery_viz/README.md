@@ -76,7 +76,7 @@ Some states are **derived** (the monitor's inference, labelled as such): `REPLAC
 
 | | Tested |
 |---|---|
-| Monitor on Celery 5.6.3, workers on 5.6.3 / RabbitMQ 4.2, 4.3 | yes (live + recorded) |
+| Monitor on Celery 5.6.3, workers on 5.6.3 / RabbitMQ 4.2, 4.3, 4.4 | yes (live + recorded) |
 | Monitor 5.6.3 reading a **Celery 4.4.7** fleet's events | yes (recorded): same fields; chains reconstruct |
 | 4.4.7: chord headers submitted directly by a client | **not groupable by `root_id`** (each header is its own root); use a single parent task or a run-key rule |
 | Redis as the broker, other Celery versions | **not verified** |
