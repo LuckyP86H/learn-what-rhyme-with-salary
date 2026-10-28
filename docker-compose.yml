@@ -32,7 +32,7 @@ x-app: &app
 services:
   # ---- infrastructure -------------------------------------------------------------------------------
   rabbitmq:
-    image: rabbitmq:${RABBITMQ_VERSION:-4.3}-management
+    image: rabbitmq:${RABBITMQ_VERSION:-4.4}-management
     environment:
       RABBITMQ_DEFAULT_USER: pipeline
       RABBITMQ_DEFAULT_PASS: pipeline
@@ -45,7 +45,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.8-alpine
     ports:
       - "127.0.0.1:${REDIS_PORT:-6380}:6379" # 6380, not 6379: a native redis-server often owns 6379 and silently shadows the container
     healthcheck:

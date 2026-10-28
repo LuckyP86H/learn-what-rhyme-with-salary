@@ -87,10 +87,10 @@ viz-check: ## validate the visualizer against the database (submits calls; ~3 mi
 	python3 scripts/check_viz.py --calls $(or $(CALLS),15) --chunks $(or $(CHUNKS),3)
 
 ui: ## build the visualizer UI into celery_viz/ui_dist (in a Node container; nothing installed on the host)
-	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:24-slim sh -c "npm ci --no-audit --no-fund && npm run build"
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:26-slim sh -c "npm ci --no-audit --no-fund && npm run build"
 
 ui-test: ## UI typecheck + unit tests (in a Node container)
-	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:24-slim sh -c "npm ci --no-audit --no-fund && npm run typecheck && npm test"
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD":/repo -w /repo/viz-ui node:26-slim sh -c "npm ci --no-audit --no-fund && npm run typecheck && npm test"
 
 test: ## unit tests (inside the app image)
 	$(COMPOSE) run --rm --no-deps -T api python -m pytest -q -p no:cacheprovider

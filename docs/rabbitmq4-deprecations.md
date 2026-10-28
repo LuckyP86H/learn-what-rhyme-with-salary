@@ -136,3 +136,18 @@ make test-spot                                         # chaos matrix against wh
 
 To see the failure itself: remove the two `*_queue_exclusive` lines from `config.py`, run on 4.3, and
 watch `docker compose logs worker-core` and `rabbitmqctl list_queues name consumers`.
+
+## 9. Update, 2026-10-28: RabbitMQ 4.4.0 and the dependency refresh
+
+Re-run after moving the lab to Python 3.15.2, RabbitMQ 4.4.0 (now the default), Redis 8.8 and the latest
+Python/npm pins **(measured)**:
+
+* Workers, Flower and `inspect` connect with the section 5 fix; no refusals in the worker or broker logs, on
+  classic and on quorum queues. `hardened` sigkill (classic and quorum), the `default` sigkill/child runs and
+  the visualizer-vs-database check all behave as in the earlier sections.
+* New in the 4.4 broker log: a deprecation warning for `management_metrics_collection` (the management
+  plugin's own metrics). Nothing in Celery uses it; this repo's `/dead-letters` peek calls the management
+  HTTP API, so that is the thing to watch there.
+* **Not re-tested on 4.4:** stock Celery settings without the exclusive-queue fix (4.3 already refuses them,
+  so I would expect the same, but I did not run it) and the full eviction matrix (`child`, `term-kill`) on quorum.
+

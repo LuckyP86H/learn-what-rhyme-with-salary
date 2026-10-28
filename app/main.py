@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import Any, Literal
 
-import httpx
+import httpx2
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -152,14 +152,14 @@ def get_events(call_id: str) -> list[dict[str, Any]]:
 def dead_letters(count: int = 20) -> dict[str, Any]:
     """Peek (without consuming) at messages parked in the dead_letter queue."""
     try:
-        resp = httpx.post(
+        resp = httpx2.post(
             f"{settings.rabbitmq_api_url}/queues/%2F/dead_letter/get",
             auth=(settings.rabbitmq_user, settings.rabbitmq_password),
             json={"count": count, "ackmode": "ack_requeue_true", "encoding": "auto", "truncate": 2000},
             timeout=5,
         )
         resp.raise_for_status()
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         raise HTTPException(502, f"RabbitMQ management API unavailable: {exc}") from exc
     messages = []
     for m in resp.json():
